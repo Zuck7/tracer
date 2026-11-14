@@ -55,6 +55,13 @@ class AtlasStore:
         doc = db.control.find_one({"recall_id": recall_id}, {"paused": 1})
         return bool(doc and doc.get("paused"))
 
+    def take_crash_request(self, recall_id: str) -> bool:
+        """Demo crash on demand: the live log sets control.crash. find_one_and_update
+        reads and clears it in one step, so only one crash happens per press."""
+        doc = db.control.find_one_and_update({"recall_id": recall_id, "crash": True},
+                                             {"$set": {"crash": False}})
+        return doc is not None
+
     def finish(self, recall_id: str, report: dict[str, Any]) -> None:
         db.control.update_one(
             {"recall_id": recall_id},

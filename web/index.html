@@ -3,152 +3,800 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tracer live log</title>
+<title>Tracer recall</title>
 <style>
   :root {
-    --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
-    --ok: #3fb950; --sent: #58a6ff; --fail: #f85149; --warn: #d29922; --mem: #bc8cff;
+    --floor: #1d2830; --deck: #24323b; --deck-2: #2c3c46; --rule: #3a4c57;
+    --ink: #eef3f1; --muted: #a3b3ba; --wait: #5d6f79;
+    --hazard: #f2c230; --hazard-ink: #1d2830;
+    --ok: #43b97f; --fail: #ef6157; --sent: #8cc3ef; --ai: #b9a2f5;
+    --num: "DIN Alternate", "DIN Condensed", Bahnschrift, "Arial Narrow", system-ui, sans-serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  header { position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--line);
-           padding: 12px 16px; display: grid; gap: 10px; z-index: 1; }
-  .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
-  h1 { font-size: 16px; margin: 0; }
-  h1 small { color: var(--muted); font-weight: normal; }
-  select, button { font: inherit; background: #21262d; color: var(--text); border: 1px solid var(--line);
-                   border-radius: 6px; padding: 6px 10px; cursor: pointer; }
-  button:hover { border-color: var(--muted); }
-  button.danger { border-color: var(--fail); color: var(--fail); }
-  button.go { border-color: var(--ok); color: var(--ok); }
-  .stat { color: var(--muted); }
-  .stat b { color: var(--text); }
-  .stat b.done { color: var(--ok); }
-  #countdown { font-size: 18px; color: var(--warn); }
-  #countdown.late { color: var(--fail); }
-  #log { padding: 8px 16px 40px; }
-  .ev { display: grid; grid-template-columns: 70px 40px 120px 1fr; gap: 10px; padding: 3px 0;
-        border-bottom: 1px solid #161b22; animation: flash .8s ease-out; }
-  .ev .t, .ev .seq { color: var(--muted); }
-  .ev .e { font-weight: bold; }
-  .verified .e, .reconciled .e, .repair_verified .e { color: var(--ok); }
-  .sent .e { color: var(--sent); }
-  .failed .e, .duplicate_detected .e, .repair_rejected .e { color: var(--fail); }
-  .denied .e, .paused .e { color: var(--warn); }
-  .memory_hit .e, .repair_proposed .e { color: var(--mem); }
-  .reconciled, .repair_verified, .memory_hit, .duplicate_detected { background: #1c2128; }
-  @keyframes flash { from { background: #1f6feb33; } }
-  @media (max-width: 640px) {
-    .ev { grid-template-columns: 34px 1fr; }
-    .ev .t { display: none; }
-    .ev .e { grid-column: 2; }
-    .ev .d { grid-column: 1 / -1; padding-left: 44px; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--floor); color: var(--ink); font: 16px/1.5 var(--body); }
+  button, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--sent); outline-offset: 2px; }
+
+  /* ---------- header ---------- */
+  .top { background: var(--deck); border-bottom: 1px solid var(--rule); padding: 16px 24px;
+         display: grid; gap: 12px 28px; grid-template-columns: auto 1fr auto; align-items: center; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand b { font: 30px/1 var(--num); letter-spacing: .02em; }
+  select { background: var(--deck-2); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; }
+  .problem { margin: 0; font-size: 18px; max-width: 62ch; }
+  .problem strong { color: var(--hazard); font-weight: 600; }
+  .pickup { text-align: right; }
+  .pickup .n { font: 44px/1 var(--num); display: block; font-variant-numeric: tabular-nums; }
+  .pickup .n.late { color: var(--fail); }
+  .pickup small { color: var(--muted); }
+  .controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .btn { background: var(--deck-2); border: 1px solid var(--rule); border-radius: 6px; padding: 9px 14px;
+         cursor: pointer; font-weight: 600; }
+  .btn:hover { border-color: var(--muted); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.go { background: var(--ok); border-color: var(--ok); color: #0f2119; }
+  .btn.stop { border-color: var(--fail); color: var(--fail); }
+  .btn.quiet { font-weight: 400; color: var(--muted); padding: 9px 10px; }
+  .agent { display: inline-flex; align-items: center; gap: 8px; margin-right: 6px; color: var(--muted); }
+  .agent i { width: 10px; height: 10px; border-radius: 50%; background: var(--wait); }
+  .agent.running i { background: var(--ok); box-shadow: 0 0 0 4px #43b97f33; }
+  .agent.paused i { background: var(--hazard); }
+  .agent.dead i { background: var(--fail); }
+  .agent.running, .agent.paused, .agent.dead { color: var(--ink); }
+
+  /* ---------- layout ---------- */
+  main { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px;
+         padding: 24px; max-width: 1500px; margin: 0 auto; }
+  h2 { font: 22px/1.2 var(--num); margin: 0 0 12px; letter-spacing: .01em; }
+
+  /* ---------- chapters (a real sequence, so numbered) ---------- */
+  .chapters { list-style: none; margin: 0; padding: 0; position: relative; }
+  .chapters::before { content: ""; position: absolute; left: 21px; top: 24px; bottom: 24px; width: 2px;
+                      background: var(--rule); }
+  .ch { position: relative; padding: 4px 0 26px 66px; }
+  .ch .num { position: absolute; left: 0; top: 0; width: 44px; height: 44px; border-radius: 50%;
+             display: grid; place-items: center; font: 22px/1 var(--num); background: var(--floor);
+             border: 2px solid var(--wait); color: var(--muted); }
+  .ch h3 { margin: 6px 0 2px; font-size: 20px; }
+  .ch .why { margin: 0; color: var(--muted); max-width: 62ch; }
+  .ch .progress { margin: 10px 0 0; color: var(--muted); }
+  .ch .progress b { font: 34px/1 var(--num); color: var(--ink); }
+  .ch.waiting h3, .ch.waiting .progress { color: var(--muted); }
+  .ch.active .num { border-color: var(--sent); color: var(--ink); box-shadow: 0 0 0 6px #8cc3ef22; }
+  .ch.done .num { background: var(--ok); border-color: var(--ok); color: #0f2119; }
+  .ch.attention .num { background: var(--fail); border-color: var(--fail); color: #2a0d0b; }
+  .ch.attention .progress b { color: var(--fail); }
+  .ch.done .progress b { color: var(--ok); }
+
+  .notes { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; max-width: 64ch; }
+  .note { padding: 8px 12px; border-left: 4px solid var(--muted); background: var(--deck); }
+  .note.ok { border-color: var(--ok); } .note.fail { border-color: var(--fail); }
+  .note.ai { border-color: var(--ai); } .note.warn { border-color: var(--hazard); }
+
+  /* the one loud element: disruptions look like hazard tape */
+  .hazard { margin-top: 12px; max-width: 64ch; background: var(--deck-2); border: 2px solid var(--hazard);
+            border-radius: 4px; padding: 12px 14px 12px 28px; position: relative; display: grid; gap: 8px; }
+  .hazard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 14px;
+                    background: repeating-linear-gradient(-45deg, var(--hazard) 0 7px, var(--hazard-ink) 7px 14px); }
+  .hazard p { margin: 0; }
+  .hazard .state { color: var(--hazard); font-weight: 600; }
+  .hazard .btn { justify-self: start; background: var(--hazard); border-color: var(--hazard); color: var(--hazard-ink); }
+
+  .report { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; max-width: 64ch; }
+  .report li b { font: 24px/1 var(--num); margin-right: 6px; }
+  table.cmp { margin-top: 14px; border-collapse: collapse; min-width: min(100%, 460px); }
+  table.cmp th, table.cmp td { padding: 6px 12px 6px 0; text-align: left; border-bottom: 1px solid var(--rule); }
+  table.cmp td.n { font: 22px/1 var(--num); text-align: right; }
+  table.cmp th { color: var(--muted); font-weight: 400; }
+
+  /* ---------- scope breakdown (chapter 1) ---------- */
+  .scope { margin-top: 12px; max-width: 64ch; border-bottom: 1px solid var(--rule); }
+  .sys { border-top: 1px solid var(--rule); }
+  .sys summary { cursor: pointer; list-style: none; padding: 10px 0; display: grid; gap: 6px 14px;
+                 grid-template-columns: 92px 1fr auto; align-items: baseline; }
+  .sys summary::-webkit-details-marker { display: none; }
+  .sys summary .name { font-weight: 700; }
+  .sys summary .found b { font: 26px/1 var(--num); margin-right: 4px; }
+  .sys summary .found { color: var(--muted); }
+  .sys summary .more { color: var(--muted); font-size: 14px; }
+  .sys[open] summary .more::after { content: " ▴"; } .sys summary .more::after { content: " ▾"; }
+  .chips { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 1px 9px; border-radius: 12px; font-size: 14px; background: var(--deck-2);
+          border: 1px solid var(--rule); color: var(--muted); white-space: nowrap; }
+  .chip.act { border-color: var(--sent); color: var(--ink); }
+  .chip.refuse { border-color: var(--hazard); color: var(--hazard); }
+  .items { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+  .items li { display: grid; grid-template-columns: 92px 1fr; gap: 0 14px; font-size: 15px; }
+  .items .id { font: 16px/1.4 var(--num); }
+  .items .reason { color: var(--muted); grid-column: 2; }
+  .checks { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; max-width: 64ch; }
+  .checks li.ok { color: var(--ok); } .checks li.bad { color: var(--fail); font-weight: 600; }
+  .checks li .prob { display: block; font-weight: 400; padding-left: 1.4em; }
+  .insights { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; max-width: 64ch; }
+  .insights li { padding-left: 1.5em; text-indent: -1.5em; }
+  .insights li.ok::before { content: "✓ "; color: var(--ok); }
+  .insights li.bad::before { content: "✗ "; color: var(--fail); }
+  .insights li.info::before { content: "• "; color: var(--muted); }
+
+  /* ---------- world ---------- */
+  .side { display: grid; gap: 28px; align-content: start; }
+  .world { display: grid; gap: 16px; }
+  .group h4 { margin: 0 0 6px; font-weight: 600; display: flex; justify-content: space-between; gap: 12px; }
+  .group h4 span { font: 20px/1 var(--num); color: var(--muted); }
+  .group h4 span.all { color: var(--ok); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 5px; }
+  .tile { position: relative; height: 38px; border-radius: 4px; display: grid; place-items: center;
+          font: 15px/1 var(--num); background: var(--deck-2); color: var(--muted); border: 1px solid var(--rule); }
+  .tile.sent { background: #8cc3ef33; border-color: var(--sent); color: var(--ink); animation: pulse 1s ease-in-out infinite; }
+  .tile.verified { background: var(--ok); border-color: var(--ok); color: #0f2119; }
+  .tile.failed { background: var(--fail); border-color: var(--fail); color: #2a0d0b; }
+  .tile.escalated { background: transparent; border: 2px solid var(--hazard); color: var(--hazard); }
+  .tile.refused { background: transparent; border: 1px dashed var(--hazard); color: var(--hazard); text-decoration: line-through; }
+  .tile sup { position: absolute; top: -6px; right: -4px; background: var(--hazard); color: var(--hazard-ink);
+              border-radius: 8px; padding: 1px 5px; font: 11px/1.3 var(--body); font-weight: 700; }
+  @keyframes pulse { 50% { background: #8cc3ef66; } }
+  .empty { color: var(--muted); margin: 0; }
+
+  /* ---------- log ---------- */
+  .loghead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .loghead label { color: var(--muted); font-size: 14px; cursor: pointer; }
+  #log { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: auto; border-top: 1px solid var(--rule); }
+  #log li { display: grid; grid-template-columns: 74px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--rule); }
+  #log time { color: var(--muted); font: 15px/1.5 var(--num); font-variant-numeric: tabular-nums; }
+  #log .ok { color: var(--ok); } #log .fail { color: var(--fail); } #log .ai { color: var(--ai); }
+  #log .warn { color: var(--hazard); } #log .info { color: var(--ink); } #log .quiet { color: var(--muted); }
+  #log li.fresh { animation: fresh 1.2s ease-out; }
+  @keyframes fresh { from { background: #8cc3ef22; } }
+  #log li.loud { background: #ef615722; }
+  .tech { display: none; grid-column: 2; color: var(--muted); font: 12px/1.4 ui-monospace, Menlo, monospace;
+          white-space: pre-wrap; word-break: break-word; }
+  body.show-tech .tech { display: block; }
+
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: min(92vw, 560px);
+           background: var(--ink); color: var(--floor); padding: 10px 16px; border-radius: 6px; font-weight: 600;
+           opacity: 0; pointer-events: none; transition: opacity .2s; }
+  #toast.show { opacity: 1; }
+
+  @media (max-width: 980px) {
+    main { grid-template-columns: 1fr; padding: 16px; }
+    .top { grid-template-columns: 1fr auto; padding: 14px 16px; }
+    .problem { grid-column: 1 / -1; grid-row: 2; font-size: 16px; }
+    .pickup .n { font-size: 34px; }
+  }
+  @media (max-width: 560px) {
+    .top { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .brand { min-width: 0; }
+    .brand select { min-width: 0; flex: 1; max-width: 100%; }
+    .problem { grid-row: auto; }
+    .pickup { text-align: left; display: flex; align-items: baseline; gap: 10px; }
+    .controls { gap: 8px; }
+    .agent { width: 100%; }
+  }
+  @media (max-width: 480px) {
+    .ch { padding-left: 54px; }
+    .ch .num { width: 38px; height: 38px; font-size: 19px; }
+    .chapters::before { left: 18px; }
+    #log li { grid-template-columns: 1fr; gap: 0; }
+    .sys summary { grid-template-columns: 1fr auto; }
+    .sys summary .found { grid-column: 1 / -1; grid-row: 2; }
+    .chips { grid-column: 1 / -1; }
+    .items li { grid-template-columns: 1fr; }
+    .items .reason { grid-column: 1; }
+    .tech { grid-column: 1; }
+    .btn { padding: 9px 11px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tile.sent, #log li.fresh { animation: none; }
   }
 </style>
 </head>
 <body>
-<header>
-  <div class="row">
-    <h1>Tracer <small>live log · state from MongoDB Atlas change stream</small></h1>
-    <select id="recall">
-      <option value="RC-GB-2611">RC-GB-2611 · granola bars · peanuts</option>
-      <option value="RC-OB-3107">RC-OB-3107 · oat bars · tree nuts</option>
+<header class="top">
+  <div class="brand">
+    <b>Tracer</b>
+    <select id="recall" aria-label="Recall">
+      <option value="RC-GB-2611">Recall 1: granola bars, lot GB-2611</option>
+      <option value="RC-OB-3107">Recall 2: oat bars, lot OB-3107</option>
     </select>
-    <span>next truck pickup <span id="countdown">--:--</span></span>
   </div>
-  <div class="row" id="stats"></div>
-  <div class="row">
-    <button class="go" onclick="startAgent()">▶ start agent</button>
-    <button class="danger" onclick="post('/agent/kill')">✖ kill agent (-9)</button>
-    <button onclick="chaos('warehouse', {drop_next_writes: 2})">drop 2 warehouse writes</button>
-    <button onclick="chaos('carrier', {api_version: 'v2'})">change carrier API</button>
-    <button id="pauseBtn" onclick="togglePause()">pause</button>
-    <button onclick="reset(false)">reset</button>
-    <button onclick="reset(true)">reset + wipe memory</button>
-    <span class="stat" id="status"></span>
+  <p class="problem" id="problem"></p>
+  <div class="pickup"><span class="n" id="countdown">--:--</span><small id="countdownLabel">until the next truck pickup</small></div>
+  <div class="controls">
+    <span class="agent" id="agent"><i></i><span id="agentText">Agent stopped</span></span>
+    <button class="btn go" id="startBtn">Start agent</button>
+    <button class="btn stop" id="killBtn">Kill agent (-9)</button>
+    <button class="btn" id="pauseBtn">Pause</button>
+    <button class="btn" id="resetBtn">Reset</button>
+    <button class="btn quiet" id="wipeBtn">Reset and forget learned fixes</button>
   </div>
 </header>
-<div id="log"></div>
+
+<main>
+  <section aria-labelledby="storyTitle">
+    <h2 id="storyTitle">The recall, step by step</h2>
+    <ol class="chapters" id="chapters"></ol>
+  </section>
+  <div class="side">
+    <section aria-labelledby="worldTitle">
+      <h2 id="worldTitle">Where the product is</h2>
+      <div class="world" id="world"><p class="empty">Nothing found yet. Press Start agent.</p></div>
+    </section>
+    <section aria-labelledby="logTitle">
+      <div class="loghead">
+        <h2 id="logTitle">What Tracer is doing</h2>
+        <label><input type="checkbox" id="techToggle"> Show technical detail</label>
+      </div>
+      <ol id="log"></ol>
+    </section>
+  </div>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let rid = $("recall").value, source = null, paused = false, pickupAt = null;
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls;
+                                 if (text != null) e.textContent = text; return e; };
 
-const LABEL = { hold_inventory: "held", cancel_order: "cancelled",
-                intercept_shipment: "intercepted", notify_customer: "notified" };
+const RECALLS = {
+  "RC-GB-2611": { lot: "GB-2611", problem: "Granola bars from lot GB-2611 contain peanuts that aren't on the label. ",
+                  risk: "Anyone with a peanut allergy who eats one is at risk." },
+  "RC-OB-3107": { lot: "OB-3107", problem: "Oat bars from lot OB-3107 contain tree nuts that aren't on the label. ",
+                  risk: "Anyone with a tree nut allergy who eats one is at risk." },
+};
 
-function target(ev) {
-  if (!ev.step_key) return "";
-  const [, verb, id] = ev.step_key.split(":");
-  return `${verb} ${id}`;
+// What each action means in the real world.
+const A = {
+  hold_inventory:     { noun: "case", group: "Cases on shelves", system: "warehouse", record: "warehouse record",
+                        doing: (t) => `Putting case ${t} on hold`, done: (t) => `Case ${t} is on hold`,
+                        notYet: "is still for sale", past: "held" },
+  cancel_order:       { noun: "order", group: "Open orders", system: "order system", record: "order record",
+                        doing: (t) => `Cancelling order ${t}`, done: (t) => `Order ${t} is cancelled before it ships`,
+                        notYet: "is still open", past: "cancelled" },
+  intercept_shipment: { noun: "shipment", group: "Shipments on trucks", system: "carrier", record: "carrier's record",
+                        doing: (t) => `Stopping shipment ${t}`, done: (t) => `Shipment ${t} is being brought back`,
+                        notYet: "is still on its way", past: "stopped" },
+  notify_customer:    { noun: "customer", group: "Households", system: "notification system", record: "notification system",
+                        doing: (t) => `Notifying customer ${t}`, done: (t) => `Customer ${t} has exactly one notice`,
+                        notYet: "has no notice yet", past: "notified once" },
+};
+const ORDER = ["hold_inventory", "cancel_order", "intercept_shipment", "notify_customer"];
+
+const CHAPTERS = [
+  { id: "stake", title: "See what's at stake",
+    why: "Tracer asks the warehouse, the order system and the carrier where this lot went. Plain code decides what's in scope, not the AI." },
+  { id: "hold_inventory", title: "Stop the spread",
+    why: "Put every case of the lot on hold, so nothing more leaves the warehouse.",
+    hazard: { label: "Warehouse glitch", what: "The warehouse system will say OK for the next hold but not actually save it.",
+              act: () => chaos("warehouse", { drop_next_writes: 1 }, "Warehouse glitch armed: the next hold will be dropped."),
+              state: (s) => (s.chaos.warehouse?.drop_next_writes > 0) ? "Armed: the next hold will be silently dropped." : "" } },
+  { id: "cancel_order", title: "Cancel open orders",
+    why: "Cancel orders that haven't shipped yet, before the truck picks them up. If the truck wins the race, Tracer stops that shipment instead.",
+    hazard: { label: "Truck arrives early", what: "The truck collects one order before Tracer can cancel it. Cancelling is now impossible.",
+              act: () => post("/chaos/pickup", { recall_id: rid }, "The truck collected an order early. Its cancel will now fail."),
+              state: () => "" } },
+  { id: "intercept_shipment", title: "Stop shipments on the road",
+    why: "Ask the carrier to bring back shipments that are already on trucks.",
+    hazard: { label: "Carrier changes its API", what: "The carrier renames its endpoint and fields overnight. Old requests now get 404.",
+              act: () => chaos("carrier", { api_version: "v2" }, "The carrier is now on its new API."),
+              state: (s) => s.chaos.carrier?.api_version === "v2" ? "The carrier is on its new API." : "",
+              disabled: (s) => s.chaos.carrier?.api_version === "v2" } },
+  { id: "notify_customer", title: "Tell every customer, once",
+    why: "Every household that bought the lot gets exactly one notice. Not zero, not two.",
+    hazard: { label: "Crash the agent", what: "We kill the process in the middle of the notices. A naive agent would resend or skip one.",
+              act: () => crashOrRestart(),
+              labelFor: (s) => (!s.agent_running && agentDied(s)) ? "Restart agent" : "Crash the agent",
+              disabled: (s) => !s.agent_running && !agentDied(s),
+              state: (s) => (!s.agent_running && agentDied(s))
+                ? "The agent process is dead. Restart it: it checks the real systems before doing anything." : "" } },
+  { id: "proof", title: "Prove it",
+    why: "Every number here is counted from MongoDB Atlas, and every step carries the record Tracer read back." },
+];
+
+let rid = $("recall").value, source = null, S = null, STEPS = [], notes = {}, denied = [];
+let SCOPE = null, ESC = [];   // from the agent's `planned` events: what it found, and escalations
+
+// Plain words for what each system reported and what Tracer decided.
+const STATUS_WORD = { available: "on the shelf", open: "open", shipped: "on a truck", delivered: "in a home",
+                      in_transit: "on a truck", label_created: "label printed", cancelled: "cancelled",
+                      intercept_requested: "being stopped", hold: "on hold" };
+const DECISION_WORD = { hold: "hold", refuse: "refuse", cancel: "cancel", intercept_shipment: "stop its shipment",
+                        notify_only: "notice only", intercept: "stop", skip: "skip", notify: "notify" };
+const ACTING = new Set(["hold", "cancel", "intercept_shipment", "intercept", "notify"]);
+const SYSTEMS = [
+  { key: "warehouse", name: "Warehouse", noun: ["case", "cases"] },
+  { key: "orders", name: "Orders", noun: ["order", "orders"] },
+  { key: "carrier", name: "Trucks", noun: ["shipment", "shipments"] },
+  { key: "customers", name: "Homes", noun: ["customer", "customers"] },
+];
+const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const isEscalated = (s) => s.action === "cancel_order" && s.status === "failed" && /^already (shipped|delivered)/.test(s.last_error || "");
+
+// ---------- event → plain English ----------
+function sentence(ev) {
+  const a = A[ev.action] || {}, t = ev.target_id || "", d = ev.detail || {};
+  const who = (ev.actor || "").split(":")[1] || "the agent";
+  switch (ev.event) {
+    case "planned": {
+      if (d.scope) {
+        const parts = SYSTEMS.map((x) => pl((d.scope[x.key] || []).length, ...x.noun));
+        return [`Searched every system for lot ${d.scope.lot}: found ${parts.join(", ")}. Decided what to do with each.`, "info"];
+      }
+      if (d.escalation)
+        return [`Order ${d.escalation.order_id} is already on a truck, so it can't be cancelled. Tracer will stop its shipment ${d.escalation.tracking_no} instead.`, "warn"];
+      return [`${pl(ev.count ?? 0, "step", "steps")} planned.`, "info"];
+    }
+    case "lease_claimed": return [`Tracer (${who}) took charge of the recall.`, "quiet"];
+    case "denied": return [`Refused ${t}: ${ev.policy_reason || d.reason || "outside the recall"}.`, "warn"];
+    case "sent": return [d.attempt > 1 ? `${a.doing?.(t) ?? t} again, attempt ${d.attempt}…` : `${a.doing?.(t) ?? t}…`, "quiet"];
+    case "verified": return [`✓ ${a.done?.(t) ?? t}. Confirmed by reading the ${a.record || "record"}.`, "ok"];
+    case "reconciled": return [`✓ ${a.done?.(t) ?? t}. It was done before the crash, so Tracer checked the ${a.record || "record"} and did not resend.`, "ok"];
+    case "failed": return [failedSentence(ev, a, t, d.error || ""), /^already (shipped|delivered)/.test(d.error || "") ? "warn" : "fail"];
+    case "duplicate_detected": return [`${t} has more than one notice. Flagged for a human.`, "fail"];
+    case "paused": return ["Paused by a reviewer. Tracer stopped before its next step.", "warn"];
+    case "repair_proposed":
+      return d.source === "memory"
+        ? [`Using a fix from memory for ${t}.`, "ai"]
+        : [`Asked Claude for a new request shape. ${d.explanation || ""}`.trim(), "ai"];
+    case "memory_hit": return [`Found a fix that worked before (match ${fmtScore(d.score)}). No AI call needed.`, "ai"];
+    case "repair_verified": return [`✓ The fix worked on ${d.target_id || t}.${d.saved_to_memory ? " Saved to memory for next time." : ""} Using it for the rest.`, "ok"];
+    case "repair_rejected": return [`The proposed fix didn't work${t ? " on " + t : ""}: ${d.reason || "read-back failed"}. Tracer stopped instead of guessing.`, "fail"];
+    default: return [ev.event, "quiet"];
+  }
+}
+function failedSentence(ev, a, t, err) {
+  if (err.startsWith("already shipped")) {
+    const trk = (err.match(/TRK-\d+/) || [])[0];
+    return `↪ Order ${t} left on a truck before Tracer could cancel it. Escalated: stopping shipment ${trk || "on its truck"} instead.`;
+  }
+  if (err.startsWith("already delivered")) return `↪ Order ${t} was already delivered. Its customer is on the notice list.`;
+  if (err.startsWith("read-back mismatch")) return `✗ The ${a.system} said OK, but ${a.noun} ${t} ${a.notYet}. Retrying with the same request ID.`;
+  if (err.startsWith("reconcile:")) return `${t} wasn't done before the crash. Sending it again with the same request ID.`;
+  if (err.startsWith("duplicate")) return `${t}: ${err}. Flagged for a human.`;
+  const m = err.match(/→ (\d{3})/);
+  if (m && m[1] === "404") return `✗ The ${a.system} rejected the request for ${t} (404 Not Found). Its API may have changed.`;
+  if (m && m[1] === "409") return `✗ The ${a.system} refused ${t}: ${err.split(m[1])[1]?.trim() || "conflict"}.`;
+  return `✗ ${t}: ${err}`;
+}
+const fmtScore = (x) => (typeof x === "number" ? x.toFixed(2) : "high");
+
+// Chapter call-outs: the moments worth pointing at.
+function noteFor(ev) {
+  const t = ev.target_id, d = ev.detail || {}, err = d.error || "";
+  if (ev.event === "denied")
+    return ["stake", `deny:${t}`, `${t} is from lot ${d.lot || "another lot"}, a different lot. Tracer's policy gate refused to touch it.`, "warn"];
+  if (ev.event === "failed" && ev.action === "hold_inventory" && err.startsWith("read-back mismatch"))
+    return ["hold_inventory", `glitch:${t}`, `The warehouse said OK for case ${t}, but the case was still for sale. Tracer caught it by reading the record back, and retried with the same request ID.`, "fail"];
+  if (ev.event === "failed" && ev.action === "intercept_shipment" && /→ 404/.test(err))
+    return ["intercept_shipment", "404", "The carrier rejected the old request with 404. Its API changed.", "fail"];
+  if (ev.event === "memory_hit")
+    return ["intercept_shipment", "mem", `Found a fix in memory (match ${fmtScore(d.score)}). No AI call needed.`, "ai"];
+  if (ev.event === "repair_proposed" && d.source === "llm")
+    return ["intercept_shipment", "llm", `Tracer asked Claude for a fix. ${d.explanation || ""}`.trim(), "ai"];
+  if (ev.event === "repair_verified")
+    return ["intercept_shipment", "fixok", `Fix tested on ${d.target_id || t}: the shipment is stopped.${d.saved_to_memory ? " Saved to memory." : ""}`, "ok"];
+  if (ev.event === "repair_rejected")
+    return ["intercept_shipment", `fixbad:${t}`, `The fix didn't work on ${t || "the test shipment"}. Tracer stopped the remaining shipments instead of guessing.`, "fail"];
+  if (ev.event === "reconciled")
+    return [ev.action === "notify_customer" ? "notify_customer" : (ev.action || "proof"), `rec:${t}`,
+            `${t} already had it done before the crash. Tracer checked the real system and did not resend.`, "ok"];
+  if (ev.event === "duplicate_detected")
+    return ["notify_customer", `dup:${t}`, `${t} got more than one notice. Flagged for a human.`, "fail"];
+  return null;
 }
 
-function detail(ev) {
-  const d = ev.detail || {};
-  if (d.proof) return `proof: ${d.proof.observed_status}${d.proof.source === "reconcile" ? " (reconcile, not resent)" : ""}`;
-  if (d.error) return d.error;
-  if (d.attempt) return `attempt ${d.attempt}`;
-  if (ev.policy_reason && ev.event === "denied") return ev.policy_reason;
-  if (ev.count) return `${ev.count} steps planned`;
-  return ev.actor || "";
+function addEvent(ev, fresh) {
+  const [text, tone] = sentence(ev);
+  const li = el("li", fresh ? "fresh" : "");
+  if (ev.event === "duplicate_detected" || ev.event === "repair_rejected") li.classList.add("loud");
+  const when = ev.at ? new Date(/[zZ]|[+-]\d\d:\d\d$/.test(ev.at) ? ev.at : ev.at + "Z") : null;
+  const time = el("time", null, when ? when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "");
+  time.dateTime = ev.at || "";
+  li.append(time, el("span", tone, text));
+  const tech = { event: ev.event, seq: ev.seq, key: ev.step_key, policy: ev.policy_reason, detail: ev.detail };
+  li.append(el("span", "tech", JSON.stringify(tech, (k, v) => v ?? undefined)));
+  $("log").prepend(li);
+  while ($("log").children.length > 400) $("log").lastChild.remove();
+
+  if (ev.event === "denied") denied.push({ action: ev.detail?.action, target_id: ev.target_id });
+  if (ev.event === "planned" && ev.detail?.scope) SCOPE = ev.detail.scope;
+  if (ev.event === "planned" && ev.detail?.escalation
+      && !ESC.some((e) => e.order_id === ev.detail.escalation.order_id)) ESC.push(ev.detail.escalation);
+  const n = noteFor(ev);
+  if (n) { const [ch, key, txt, cls] = n; (notes[ch] ||= new Map()).set(key, [txt, cls]); }
+  if (fresh) renderChapters();
 }
 
-function add(ev) {
-  const div = document.createElement("div");
-  div.className = `ev ${ev.event}`;
-  const t = (ev.at || "").slice(11, 19);
-  div.innerHTML = `<span class="t">${t}</span><span class="seq">${ev.seq ? "#" + ev.seq : ""}</span>` +
-                  `<span class="e">${ev.event}</span><span class="d"></span>`;
-  div.querySelector(".d").textContent = `${target(ev)}  ${detail(ev)}`;
-  $("log").prepend(div);
+// ---------- state ----------
+function counts() {
+  const c = {};
+  for (const a of ORDER) c[a] = { total: 0, verified: 0, failed: 0, sent: 0, escalated: 0 };
+  for (const s of STEPS) if (c[s.action]) {
+    const st = isEscalated(s) ? "escalated" : s.status;   // escalated = handled another way, not a failure
+    c[s.action].total++; c[s.action][st] = (c[s.action][st] || 0) + 1;
+  }
+  for (const a of ORDER) c[a].handled = c[a].verified + c[a].escalated;
+  return c;
+}
+const agentDied = (s) => s && !s.agent_running && s.agent_exit_code != null && s.agent_exit_code !== 0
+                         && s.control.status !== "done";
+
+function chapterState(ch, c, s) {
+  const running = s?.agent_running, planned = STEPS.length > 0;
+  if (ch.id === "stake") return planned ? "done" : (running ? "active" : "waiting");
+  if (ch.id === "proof") {
+    if (s?.control.status === "done") return "done";
+    return ORDER.every((a) => c[a].total && c[a].handled === c[a].total) ? "active" : "waiting";
+  }
+  const x = c[ch.id];
+  if (!x.total) return "waiting";
+  if (x.handled === x.total) return "done";
+  if (x.failed && !running) return "attention";
+  if (x.sent || x.verified || x.failed) return "active";
+  return "waiting";
 }
 
-async function load() {
-  $("log").innerHTML = "";
-  (await (await fetch(`/history?recall_id=${rid}`)).json()).forEach(add);
-  if (source) source.close();
-  source = new EventSource(`/events?recall_id=${rid}`);
-  source.onmessage = (m) => add(JSON.parse(m.data));
+function progressFor(ch, c) {
+  if (ch.id === "stake") {
+    if (!STEPS.length || SCOPE) return null;   // the per-system breakdown says it better
+    const parts = ORDER.map((a) => `${c[a].total} ${A[a].group.toLowerCase()}`);
+    return el("p", "progress", `Lot ${RECALLS[rid].lot} is in ${parts.join(", ")}.`);
+  }
+  if (ch.id === "proof") return null;
+  const x = c[ch.id]; if (!x.total) return null;
+  const p = el("p", "progress");
+  p.append(el("b", null, x.verified), document.createTextNode(` of ${x.total} ${A[ch.id].past}`));
+  if (x.escalated) p.append(document.createTextNode(`, ${x.escalated} escalated to ${x.escalated === 1 ? "its" : "their"} truck`));
+  if (x.failed) p.append(document.createTextNode(`, ${x.failed} failed`));
+  return p;
+}
+
+function fmtDur(ms) {
+  const sec = Math.round(Math.abs(ms) / 1000), m = Math.floor(sec / 60), x = sec % 60;
+  return m ? `${m} min ${x} s` : `${x} s`;
+}
+
+function reportFor(s) {
+  const r = s?.control?.report; if (!r) return null;
+  const wrap = el("div");
+  const word = (n, one, many) => (n === 1 ? one : many);
+
+  // The four outcomes, as big numbers.
+  const ul = el("ul", "report");
+  const line = (n, rest) => { const li = el("li"); li.append(el("b", null, n), document.createTextNode(rest)); ul.append(li); };
+  const pair = (k, words) => r[k] && line(`${r[k].verified} of ${r[k].total}`, ` ${words}`);
+  pair("units_held", "cases held");
+  if (r.orders_cancelled) {
+    const e = r.orders_cancelled.escalated || 0;
+    line(`${r.orders_cancelled.verified} of ${r.orders_cancelled.total}`,
+         ` orders cancelled${e ? `, ${e} stopped on ${word(e, "its truck", "their trucks")} instead` : ""}`);
+  }
+  pair("shipments_intercepted", "shipments stopped");
+  pair("customers_notified", "customers notified once");
+  if (r.duplicate_notifications != null)
+    line(r.duplicate_notifications, ` duplicate ${word(r.duplicate_notifications, "notice", "notices")}, counted by the notification system itself`);
+  wrap.append(ul);
+
+  // What Tracer ran into and how it handled it.
+  const ins = el("ul", "insights");
+  const add = (cls, text) => ins.append(el("li", cls, text));
+  const lastAt = r.last_intercept_at ? new Date(r.last_intercept_at) : null, pickAt = s.pickup_at ? new Date(s.pickup_at) : null;
+  if (lastAt && pickAt) {
+    const d = pickAt - lastAt;
+    d >= 0 ? add("ok", `All shipments stopped ${fmtDur(d)} before the next truck pickup.`)
+           : add("bad", `The last shipment was stopped ${fmtDur(d)} after the truck pickup.`);
+  }
+  const esc = r.escalations || 0;
+  add(esc ? "ok" : "info", esc
+    ? `${pl(esc, "order", "orders")} left on a truck before Tracer could cancel ${word(esc, "it", "them")}. Tracer stopped ${word(esc, "its shipment", "their shipments")} instead.`
+    : "No order left before Tracer could cancel it.");
+  for (const c of (r.scope_checks || SCOPE?.checks || [])) {
+    add(c.ok ? "ok" : "bad", `Cross-check: ${c.summary}`);
+    for (const p of c.problems || []) add("bad", `Needs a human: ${p}`);
+  }
+  if (r.denied_targets) add("ok", `${pl(r.denied_targets, "item", "items")} from another lot refused by the policy gate.`);
+  if (r.failed_attempts) add("ok", `${pl(r.failed_attempts, "failed attempt", "failed attempts")} caught and handled. None was counted as done.`);
+  const llm = r.llm_repairs || 0, mem = r.memory_hits || 0;
+  if (llm || mem) add("ok", `Carrier API change repaired: ${pl(llm, "AI call", "AI calls")}, ${pl(mem, "fix", "fixes")} reused from memory.`);
+  else add("info", "No API repairs were needed.");
+  if (r.reconciled_after_crash) add("ok", `${pl(r.reconciled_after_crash, "step", "steps")} found already done after a crash, and not resent.`);
+  if (r.needs_attention?.length)
+    for (const x of r.needs_attention)
+      add("bad", `Needs a human: ${A[x.action]?.noun || ""} ${x.target_id} (${x.last_error || x.status}).`);
+  else add("ok", "Nothing needs a human.");
+  wrap.append(ins);
+
+  const cmpBox = el("div"); cmpBox.id = "cmp"; wrap.append(cmpBox);
+  if (rid === "RC-GB-2611") {
+    const b = el("button", "btn", "Run recall 2 (memory test)");
+    b.style.marginTop = "12px";
+    b.onclick = () => {
+      $("recall").value = "RC-OB-3107"; switchRecall();
+      toast(S?.chaos?.carrier?.api_version === "v2"
+        ? "Recall 2 selected. The carrier is still on its new API and learned fixes are kept. Press Start agent."
+        : "Recall 2 selected. Learned fixes are kept. Press \"Carrier changes its API\", then Start agent.");
+    };
+    wrap.append(b);
+  }
+  loadCompare();
+  return wrap;
+}
+
+async function loadCompare() {
+  try {
+    const j = await (await fetch("/compare")).json();
+    const box = $("cmp"); if (!box) return;
+    const [r1, r2] = j.recalls;
+    if (!r2 || !r2.total) { box.replaceChildren(); return; }
+    const t = el("table", "cmp");
+    const head = el("tr"); head.append(el("th", null, ""), el("th", null, "Recall 1"), el("th", null, "Recall 2"));
+    t.append(head);
+    for (const [label, k] of [["AI repair calls", "llm_calls"], ["Fixes from memory", "memory_hits"],
+                              ["Failed attempts", "failed_attempts"], ["Seconds", "seconds"]]) {
+      const tr = el("tr"); tr.append(el("th", null, label), el("td", "n", r1[k] ?? "–"), el("td", "n", r2[k] ?? "–"));
+      t.append(tr);
+    }
+    box.replaceChildren(el("p", "progress", "Same carrier change, second time round:"), t);
+  } catch (e) { /* comparison is optional */ }
+}
+
+// ---------- chapter 1: where the lot was found, and what Tracer decided ----------
+function chipLabel(sysKey, status, decision, n) {
+  if (decision === "refuse") return `${n} from another lot: refuse`;
+  if (sysKey === "customers") {
+    const w = { open: "an open order", shipped: "an order on a truck", delivered: "a delivered order" }[status] || `an order (${status})`;
+    return `${n} with ${w}: ${DECISION_WORD[decision] || decision}`;
+  }
+  return `${n} ${STATUS_WORD[status] || status.replace(/_/g, " ")}: ${DECISION_WORD[decision] || decision}`;
+}
+
+function scopeNode() {
+  const wrap = el("div"), box = el("div", "scope");
+  for (const sys of SYSTEMS) {
+    const items = SCOPE[sys.key] || [];
+    const det = el("details", "sys"), sum = el("summary");
+    const found = el("span", "found");
+    found.append(el("b", null, items.length), document.createTextNode(items.length === 1 ? sys.noun[0] : sys.noun[1]));
+    sum.append(el("span", "name", sys.name), found, el("span", "more", "Reasons"));
+    const groups = new Map();
+    for (const it of items) {
+      const st = sys.key === "customers" ? it.order_status : it.status;
+      const k = `${st}|${it.decision}`;
+      groups.set(k, (groups.get(k) || 0) + 1);
+    }
+    const chips = el("span", "chips");
+    for (const [k, n] of groups) {
+      const [st, dec] = k.split("|");
+      chips.append(el("span", `chip ${dec === "refuse" ? "refuse" : ACTING.has(dec) ? "act" : ""}`, chipLabel(sys.key, st, dec, n)));
+    }
+    sum.append(chips); det.append(sum);
+    const ul = el("ul", "items");
+    for (const it of items) {
+      const li = el("li"), st = sys.key === "customers" ? it.order_status : it.status;
+      const what = sys.key === "customers"
+        ? `via ${it.order_id} (${STATUS_WORD[st] || st}): ${DECISION_WORD[it.decision] || it.decision}`
+        : `${STATUS_WORD[st] || st}${it.lot && it.lot !== SCOPE.lot ? `, lot ${it.lot}` : ""}: ${DECISION_WORD[it.decision] || it.decision}`;
+      li.append(el("span", "id", it.id), el("span", null, what), el("span", "reason", it.reason || ""));
+      ul.append(li);
+    }
+    det.append(ul); box.append(det);
+  }
+  wrap.append(box);
+  const checks = SCOPE.checks || [];
+  if (checks.length) {
+    const ul = el("ul", "checks");
+    for (const c of checks) {
+      const li = el("li", c.ok ? "ok" : "bad", `${c.ok ? "✓" : "✗"} ${c.summary}`);
+      for (const p of c.problems || []) li.append(el("span", "prob", `Needs a human: ${p}`));
+      ul.append(li);
+    }
+    wrap.append(ul);
+  }
+  return wrap;
+}
+
+// ---------- chapter 3: orders the truck took before Tracer could cancel them ----------
+function escalationNode() {
+  const ul = el("ul", "notes");
+  for (const e of ESC) {
+    const step = STEPS.find((s) => s.action === "intercept_shipment" && s.target_id === e.tracking_no);
+    let tail = `Stopping shipment ${e.tracking_no} now…`, cls = "warn";
+    if (step?.status === "verified") { tail = `✓ Shipment ${e.tracking_no} is stopped. The bars won't reach the customer.`; cls = "ok"; }
+    else if (step?.status === "failed") { tail = `Stopping ${e.tracking_no} failed. Needs a human.`; cls = "fail"; }
+    const why = e.reason || `The cancel got "already shipped", so Tracer switched to stopping its shipment ${e.tracking_no}.`;
+    ul.append(el("li", `note ${cls}`, `The truck arrived early. ${why} ${tail}`));
+  }
+  for (const s of STEPS.filter((x) => isEscalated(x) && x.last_error.startsWith("already delivered")))
+    ul.append(el("li", "note warn", `Order ${s.target_id} was delivered before Tracer could cancel it. Its customer is on the notice list.`));
+  return ul.children.length ? ul : null;
+}
+
+function dynamicFor(ch) {
+  if (ch.id === "stake" && SCOPE) return scopeNode();
+  if (ch.id === "cancel_order") return escalationNode();
+  return null;
+}
+
+// Chapters are built once; each poll only updates their parts in place, so a
+// button is never swapped out from under a click (a run changes state every second).
+let CH = null, lastReportKey = "";
+function buildChapters() {
+  const ol = $("chapters"); ol.replaceChildren();
+  CH = CHAPTERS.map((ch, i) => {
+    const li = el("li", "ch waiting"), num = el("span", "num", String(i + 1));
+    const prog = el("div"), dyn = el("div"), notesBox = el("div"), extra = el("div");
+    li.append(num, el("h3", null, ch.title), el("p", "why", ch.why), prog, dyn, notesBox);
+    let hz = null;
+    if (ch.hazard) {
+      const box = el("div", "hazard"), state = el("p", "state"), btn = el("button", "btn", ch.hazard.label);
+      btn.onclick = ch.hazard.act;
+      box.append(el("p", null, ch.hazard.what), state, btn);
+      li.append(box); hz = { state, btn };
+    }
+    li.append(extra); ol.append(li);
+    return { li, num, prog, dyn, notesBox, extra, hz, i, notesKey: "", progKey: "", dynKey: "" };
+  });
+  lastReportKey = "";
+}
+
+function renderChapters() {
+  if (!CH) buildChapters();
+  const c = counts(), s = S;
+  CHAPTERS.forEach((ch, idx) => {
+    const v = CH[idx], st = chapterState(ch, c, s);
+    v.li.className = `ch ${st}`;
+    v.num.textContent = st === "done" ? "✓" : String(idx + 1);
+
+    const progNode = (ch.id === "stake" && !STEPS.length && !s?.agent_running)
+      ? el("p", "progress", "Press Start agent to begin.") : progressFor(ch, c);
+    const progKey = progNode ? progNode.textContent : "";
+    if (progKey !== v.progKey) { v.prog.replaceChildren(...(progNode ? [progNode] : [])); v.progKey = progKey; }
+
+    // Breakdown / escalations: rebuilt only when their text changes, so an opened
+    // <details> row stays open while the run goes on.
+    const dynNode = dynamicFor(ch);
+    const dynKey = dynNode ? dynNode.textContent : "";
+    if (dynKey !== v.dynKey) {
+      const open = [...v.dyn.querySelectorAll("details")].map((d) => d.open);
+      v.dyn.replaceChildren(...(dynNode ? [dynNode] : []));
+      v.dyn.querySelectorAll("details").forEach((d, k) => { d.open = !!open[k]; });
+      v.dynKey = dynKey;
+    }
+
+    const m = notes[ch.id];
+    const notesKey = m ? [...m.keys()].join("|") : "";
+    if (notesKey !== v.notesKey) {
+      v.notesKey = notesKey;
+      const ul = el("ul", "notes");
+      if (m) for (const [txt, cls] of m.values()) ul.append(el("li", `note ${cls}`, txt));
+      v.notesBox.replaceChildren(...(m?.size ? [ul] : []));
+    }
+
+    if (v.hz && s) {
+      v.hz.state.textContent = ch.hazard.state(s);
+      v.hz.state.hidden = !v.hz.state.textContent;
+      v.hz.btn.textContent = ch.hazard.labelFor ? ch.hazard.labelFor(s) : ch.hazard.label;
+      v.hz.btn.disabled = !!ch.hazard.disabled?.(s);
+    }
+
+    if (ch.id === "proof") {
+      const rk = JSON.stringify(s?.control?.report || null) + rid;
+      if (rk !== lastReportKey) {
+        lastReportKey = rk;
+        v.extra.replaceChildren(...(s?.control?.report ? [reportFor(s)] : []));
+      }
+    }
+  });
+}
+
+function renderWorld() {
+  const w = $("world");
+  if (!STEPS.length) { w.replaceChildren(el("p", "empty", "Nothing found yet. Press Start agent.")); return; }
+  const c = counts(); w.replaceChildren();
+  for (const a of ORDER) {
+    const g = el("div", "group"), h = el("h4", null, A[a].group);
+    const n = el("span", c[a].handled === c[a].total ? "all" : "", `${c[a].handled}/${c[a].total}`);
+    h.append(n); g.append(h);
+    const tiles = el("div", "tiles");
+    for (const s of STEPS.filter((x) => x.action === a)) {
+      const tile = el("div", `tile ${isEscalated(s) ? "escalated" : s.status}`, s.target_id.replace(/^[A-Z]+-0*/, ""));
+      tile.title = `${s.target_id}: ${isEscalated(s) ? "escalated" : s.status}${s.attempts > 1 ? `, ${s.attempts} attempts` : ""}${s.last_error ? ` (${s.last_error})` : ""}`;
+      if (s.attempts > 1) tile.append(el("sup", null, s.attempts));
+      tiles.append(tile);
+    }
+    for (const d of denied.filter((x) => x.action === a)) {
+      const tile = el("div", "tile refused", d.target_id.replace(/^[A-Z]+-0*/, ""));
+      tile.title = `${d.target_id}: refused, different lot`;
+      tiles.append(tile);
+    }
+    g.append(tiles); w.append(g);
+  }
+}
+
+function renderHeader() {
+  const s = S; if (!s) return;
+  const paused = !!s.control.paused, done = s.control.status === "done";
+  const ag = $("agent");
+  let cls = "", text = "Agent stopped";
+  if (s.agent_running && paused) { cls = "paused"; text = "Agent paused"; }
+  else if (s.agent_running) { cls = "running"; text = "Agent running"; }
+  else if (agentDied(s)) { cls = "dead"; text = `Agent process died (exit ${s.agent_exit_code})`; }
+  else if (done) { text = "Recall finished"; }
+  ag.className = `agent ${cls}`; $("agentText").textContent = text;
+  $("startBtn").textContent = agentDied(s) ? "Restart agent" : "Start agent";
+  $("startBtn").disabled = s.agent_running;
+  $("killBtn").disabled = !s.agent_running;
+  $("pauseBtn").textContent = paused ? "Resume" : "Pause";
+  $("pauseBtn").disabled = !s.control.status;
 }
 
 async function refresh() {
   try {
-    const s = await (await fetch(`/state?recall_id=${rid}`)).json();
-    $("stats").innerHTML = Object.entries(s.counts).map(([a, c]) => {
-      const total = Object.values(c).reduce((x, y) => x + y, 0), ok = c.verified || 0;
-      return `<span class="stat">${LABEL[a]} <b class="${total && ok === total ? "done" : ""}">${ok}/${total}</b></span>`;
-    }).join("") + `<span class="stat">memory fixes <b>${s.memory_fixes}</b></span>` +
-      `<span class="stat">carrier API <b>${s.chaos.carrier ? s.chaos.carrier.api_version : "?"}</b></span>`;
-    paused = !!s.control.paused;
-    $("pauseBtn").textContent = paused ? "resume" : "pause";
-    $("status").textContent = `agent: ${s.agent_running ? "running" : "stopped"}` +
-      (s.control.status ? ` · recall ${s.control.status}` : "") + (paused ? " · PAUSED" : "");
-    pickupAt = s.pickup_at ? new Date(s.pickup_at) : null;
-  } catch (e) { $("status").textContent = "live log server unreachable"; }
+    const [s, steps] = await Promise.all([
+      fetch(`/state?recall_id=${rid}`).then((r) => r.json()),
+      fetch(`/steps?recall_id=${rid}`).then((r) => r.json()),
+    ]);
+    S = s; STEPS = steps;
+    window.pickupAt = s.pickup_at ? new Date(s.pickup_at) : null;
+    renderHeader(); renderChapters(); renderWorld();
+  } catch (e) {
+    $("agentText").textContent = "Live log server unreachable";
+  }
 }
 
 function tick() {
-  if (!pickupAt) return;
-  const ms = pickupAt - Date.now(), late = ms < 0, a = Math.abs(ms) / 1000;
-  $("countdown").textContent = `${late ? "-" : ""}${String(Math.floor(a / 60)).padStart(2, "0")}:${String(Math.floor(a % 60)).padStart(2, "0")}`;
-  $("countdown").className = late ? "late" : "";
+  const at = window.pickupAt; if (!at) return;
+  const ms = at - Date.now(), late = ms < 0, a = Math.abs(ms) / 1000;
+  $("countdown").textContent = `${String(Math.floor(a / 60)).padStart(2, "0")}:${String(Math.floor(a % 60)).padStart(2, "0")}`;
+  $("countdown").classList.toggle("late", late);
+  $("countdownLabel").textContent = late ? "since the truck pickup" : "until the next truck pickup";
 }
 
-async function post(path, body = {}) {
-  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" },
-                                body: JSON.stringify(body) });
-  const j = await r.json();
-  $("status").textContent = r.ok ? JSON.stringify(j) : `error: ${j.detail}`;
-  refresh();
+// ---------- actions ----------
+let toastTimer;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show");
+                      clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 4000); }
+async function post(path, body = {}, ok) {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  toast(r.ok ? (ok || "Done.") : `Couldn't do that: ${j.detail || r.status}`);
+  await refresh();
+  return r.ok;
 }
-const chaos = (service, body) => post("/chaos", { service, body });
-const startAgent = () => post("/agent/start", { recall_id: rid });
-const togglePause = () => post("/pause", { recall_id: rid, paused: !paused });
-async function reset(wipe) { await post("/reset", { wipe_memory: wipe }); load(); }
+const chaos = (service, body, msg) => post("/chaos", { service, body }, msg);
+const startAgent = () => post("/agent/start", { recall_id: rid },
+  agentDied(S) ? "Agent restarted. It checks the real systems before doing anything." : "Agent started.");
+const crashOrRestart = () => (!S?.agent_running && agentDied(S))
+  ? startAgent()
+  : post("/agent/crash", { recall_id: rid },
+         "The agent will die right after its next call, before it can check the result.");
 
-$("recall").onchange = () => { rid = $("recall").value; load(); refresh(); };
-load(); refresh();
+$("startBtn").onclick = startAgent;
+$("killBtn").onclick = () => post("/agent/kill", {}, "Agent killed with kill -9. No cleanup, no goodbye.");
+$("pauseBtn").onclick = () => post("/pause", { recall_id: rid, paused: !S?.control.paused },
+  S?.control.paused ? "Resumed." : "Paused. Tracer stops before its next step.");
+$("resetBtn").onclick = async () => { if (await post("/reset", { wipe_memory: false }, "Reset. Learned fixes are kept.")) load(); };
+$("wipeBtn").onclick = async () => {
+  if (!confirm("Reset everything and forget every learned fix?")) return;
+  if (await post("/reset", { wipe_memory: true }, "Reset. Memory wiped.")) load();
+};
+$("techToggle").onchange = (e) => document.body.classList.toggle("show-tech", e.target.checked);
+
+async function load() {
+  notes = {}; denied = []; SCOPE = null; ESC = []; CH = null; $("log").replaceChildren();
+  const r = RECALLS[rid];
+  const p = $("problem"); p.replaceChildren(el("strong", null, r.problem), document.createTextNode(r.risk));
+  try { (await (await fetch(`/history?recall_id=${rid}`)).json()).forEach((ev) => addEvent(ev, false)); } catch (e) {}
+  if (source) source.close();
+  source = new EventSource(`/events?recall_id=${rid}`);
+  source.onmessage = (m) => addEvent(JSON.parse(m.data), true);
+  await refresh();
+}
+function switchRecall() { rid = $("recall").value; load(); }
+$("recall").onchange = switchRecall;
+
+load();
 setInterval(refresh, 1000);
 setInterval(tick, 250);
 </script>
