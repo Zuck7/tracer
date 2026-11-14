@@ -88,7 +88,7 @@ class AtlasStore:
 
     def mark_sent(self, step: Step, actor: str, policy_reason: str) -> Step:
         # 'sent' -> 'sent' is allowed: a reconcile resend of a step whose effect wasn't found.
-        return S._transition(
+        return S.transition(
             self._id(step), ["planned", "failed", "sent"],
             {"$set": {"status": "sent", "updated_at": now()}, "$inc": {"attempts": 1}},
             "sent", actor, policy_decision="allow", policy_reason=policy_reason,
@@ -97,14 +97,14 @@ class AtlasStore:
 
     def mark_verified(self, step: Step, proof: dict[str, Any], actor: str,
                       event: str = "verified") -> Step:
-        return S._transition(
+        return S.transition(
             self._id(step), ["sent"],
             {"$set": {"status": "verified", "proof": proof, "last_error": None, "updated_at": now()}},
             event, actor, detail={"proof": proof},
         )
 
     def mark_failed(self, step: Step, error: str, actor: str, event: str = "failed") -> Step:
-        return S._transition(
+        return S.transition(
             self._id(step), ["sent"],
             {"$set": {"status": "failed", "last_error": error, "updated_at": now()}},
             event, actor, detail={"error": error},

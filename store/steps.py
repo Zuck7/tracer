@@ -88,9 +88,13 @@ def get_step(step_id: ObjectId) -> dict | None:
     return db.steps.find_one({"_id": step_id})
 
 
-def _transition(step_id: ObjectId, from_statuses: list[str], update: dict, event: str,
-                actor: str = ACTOR, **audit_extra: Any) -> dict:
+def transition(step_id: ObjectId, from_statuses: list[str], update: dict, event: str,
+               actor: str = ACTOR, **audit_extra: Any) -> dict:
     """Change a step's status and write its audit entry in one transaction.
+
+    Public so callers can put extra fields (policy_reason, duplicate_detected
+    details, ...) into the SAME transaction as the status change:
+        transition(step_id, ["sent"], {"$set": {...}}, "duplicate_detected", actor, detail={...})
 
     Raises ValueError if the step isn't in one of from_statuses, so an illegal
     transition (e.g. planned -> verified) can't happen silently.
@@ -113,9 +117,12 @@ def _transition(step_id: ObjectId, from_statuses: list[str], update: dict, event
         return session.with_transaction(txn)
 
 
+_transition = transition  # old name, kept so existing callers keep working
+
+
 def mark_sent(step_id: ObjectId) -> dict:
     """Call this BEFORE the API call. 'sent' -> 'sent' is allowed for a reconcile resend."""
-    return _transition(
+    return transition(
         step_id, ["planned", "failed", "sent"],
         {"$set": {"status": "sent", "updated_at": now()}, "$inc": {"attempts": 1}},
         "sent", policy_decision="allow",
@@ -128,7 +135,7 @@ def mark_verified(step_id: ObjectId, read_back_id: str, observed_status: str,
     t = now()
     proof = {"read_back_id": read_back_id, "observed_status": observed_status, "source": source, "at": t}
     event = "reconciled" if source == "reconcile" else "verified"
-    return _transition(
+    return transition(
         step_id, ["sent"],
         {"$set": {"status": "verified", "proof": proof, "last_error": None, "updated_at": t}},
         event, proof=proof,
@@ -136,7 +143,7 @@ def mark_verified(step_id: ObjectId, read_back_id: str, observed_status: str,
 
 
 def mark_failed(step_id: ObjectId, error: str) -> dict:
-    return _transition(
+    return transition(
         step_id, ["sent"],
         {"$set": {"status": "failed", "last_error": error, "updated_at": now()}},
         "failed", error=error,
