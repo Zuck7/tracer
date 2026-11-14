@@ -128,8 +128,11 @@
   .group h4 span { font: 20px/1 var(--num); color: var(--muted); }
   .group h4 span.all { color: var(--ok); }
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 5px; }
-  .tile { position: relative; height: 38px; border-radius: 4px; display: grid; place-items: center;
+  .tile { position: relative; height: 38px; border-radius: 4px; display: grid; place-items: center; padding: 0;
           font: 15px/1 var(--num); background: var(--deck-2); color: var(--muted); border: 1px solid var(--rule); }
+  button.tile { cursor: pointer; }
+  button.tile:hover { filter: brightness(1.15); }
+  .tile.sel { outline: 3px solid var(--ink); outline-offset: 2px; }
   .tile.sent { background: #8cc3ef33; border-color: var(--sent); color: var(--ink); animation: pulse 1s ease-in-out infinite; }
   .tile.verified { background: var(--ok); border-color: var(--ok); color: #0f2119; }
   .tile.failed { background: var(--fail); border-color: var(--fail); color: #2a0d0b; }
@@ -154,6 +157,80 @@
   .tech { display: none; grid-column: 2; color: var(--muted); font: 12px/1.4 ui-monospace, Menlo, monospace;
           white-space: pre-wrap; word-break: break-word; }
   body.show-tech .tech { display: block; }
+
+  .seqlink { background: none; border: 0; padding: 0; margin-right: 6px; cursor: pointer; color: var(--sent);
+             font: 15px/1.5 var(--num); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* ---------- steps that hit a problem ---------- */
+  .hint { color: var(--muted); font-size: 14px; margin: -6px 0 10px; }
+  .count { font: 20px/1 var(--num); color: var(--muted); }
+  #trouble { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); max-height: 40vh; overflow: auto; }
+  #trouble li { border-bottom: 1px solid var(--rule); }
+  .trow { width: 100%; background: none; border: 0; padding: 9px 6px; cursor: pointer; text-align: left;
+          display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline; }
+  .trow:hover, .trow.sel { background: var(--deck); }
+  .trow.sel { box-shadow: inset 4px 0 0 var(--ink); }
+  .trow .seq { font: 18px/1.2 var(--num); color: var(--muted); }
+  .trow .what { font-weight: 600; }
+  .trow .st { color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .trow .tags { grid-column: 2 / -1; }
+  .tag { padding: 1px 9px; border-radius: 12px; font-size: 13px; border: 1px solid var(--rule); color: var(--muted);
+         white-space: nowrap; }
+  .tag.fail { border-color: var(--fail); color: var(--fail); }
+  .tag.warn { border-color: var(--hazard); color: var(--hazard); }
+  .tag.ok { border-color: var(--ok); color: var(--ok); }
+  .tag.ai { border-color: var(--ai); color: var(--ai); }
+
+  /* ---------- step trace (takes the story's place while a step is open) ---------- */
+  #trace { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; background: var(--deck);
+           border: 1px solid var(--rule); border-radius: 6px; padding: 16px 20px 24px; }
+  .tbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+          margin-bottom: 16px; }
+  .tbar .nav { display: flex; flex-wrap: wrap; gap: 8px; }
+  .kicker { margin: 0; color: var(--muted); font-size: 14px; }
+  .ttitle { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 2px 0 6px; font: 36px/1.1 var(--num); }
+  .pill { font: 600 13px/1 var(--body); padding: 5px 10px; border-radius: 12px; border: 1px solid var(--wait);
+          color: var(--muted); }
+  .pill.verified { background: var(--ok); border-color: var(--ok); color: #0f2119; }
+  .pill.failed { background: var(--fail); border-color: var(--fail); color: #2a0d0b; }
+  .pill.sent { border-color: var(--sent); color: var(--sent); }
+  .pill.escalated { border-color: var(--hazard); color: var(--hazard); }
+  .outcome { margin: 0 0 12px; max-width: 62ch; }
+  #trace .tags { margin: 0 0 12px; }
+  dl.facts { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; font-size: 15px; }
+  dl.facts dt { color: var(--muted); }
+  dl.facts dd { margin: 0; word-break: break-word; }
+  code { font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  #trace h3 { font: 20px/1.2 var(--num); margin: 24px 0 0; letter-spacing: .01em; }
+  .tl { list-style: none; margin: 14px 0 0; padding: 0; position: relative; }
+  .tl::before { content: ""; position: absolute; left: 6px; top: 10px; bottom: 10px; width: 2px; background: var(--rule); }
+  .tl > li { position: relative; padding: 0 0 20px 30px; }
+  .tl > li:last-child { padding-bottom: 0; }
+  .tl > li::before { content: ""; position: absolute; left: 0; top: 4px; width: 14px; height: 14px; border-radius: 50%;
+                     background: var(--floor); border: 2px solid var(--wait); box-sizing: border-box; }
+  .tl > li.ok::before { background: var(--ok); border-color: var(--ok); }
+  .tl > li.fail::before { background: var(--fail); border-color: var(--fail); }
+  .tl > li.sent::before { border-color: var(--sent); }
+  .tl > li.ai::before { background: var(--ai); border-color: var(--ai); }
+  .tl > li.warn::before { background: var(--hazard); border-color: var(--hazard); }
+  .tl .when { color: var(--muted); font: 14px/1.5 var(--num); font-variant-numeric: tabular-nums; }
+  .tl .when b { font-weight: 400; margin-left: 10px; color: var(--wait); }
+  .tl h4 { margin: 0; font-size: 16px; }
+  .tl li.fail h4 { color: var(--fail); } .tl li.ok h4 { color: var(--ok); }
+  .tl li.ai h4 { color: var(--ai); } .tl li.warn h4 { color: var(--hazard); }
+  .tl p { margin: 5px 0 0; color: var(--muted); max-width: 64ch; font-size: 15px; }
+  .tl p.fact { color: var(--ink); }
+  .cap { margin: 8px 0 0; color: var(--muted); font-size: 13px; max-width: 64ch; }
+  pre.wire { margin: 6px 0 0; padding: 9px 12px; background: var(--floor); border: 1px solid var(--rule);
+             border-radius: 4px; font: 12.5px/1.55 ui-monospace, Menlo, Consolas, monospace; color: var(--ink);
+             white-space: pre-wrap; word-break: break-word; }
+  .live .btn { margin-top: 10px; }
+  .verdict { margin: 8px 0 0; max-width: 64ch; font-weight: 600; }
+  .verdict.good { color: var(--ok); } .verdict.bad { color: var(--fail); }
+  .verdict.warn { color: var(--hazard); } .verdict.info { color: var(--ink); font-weight: 400; }
+  details.raw { margin-top: 10px; border-top: 1px solid var(--rule); padding-top: 10px; }
+  details.raw summary { cursor: pointer; color: var(--muted); }
 
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: min(92vw, 560px);
            background: var(--ink); color: var(--floor); padding: 10px 16px; border-radius: 6px; font-weight: 600;
@@ -187,6 +264,13 @@
     .items .reason { grid-column: 1; }
     .tech { grid-column: 1; }
     .btn { padding: 9px 11px; }
+    #trace { padding: 14px 14px 20px; }
+    .ttitle { font-size: 30px; }
+    dl.facts { grid-template-columns: 1fr; gap: 0; }
+    dl.facts dd { margin-bottom: 6px; }
+  }
+  @media (max-width: 980px) {
+    #trace { position: static; max-height: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     .tile.sent, #log li.fresh { animation: none; }
@@ -217,13 +301,43 @@
 
 <main>
   <section aria-labelledby="storyTitle">
-    <h2 id="storyTitle">The recall, step by step</h2>
-    <ol class="chapters" id="chapters"></ol>
+    <div id="story">
+      <h2 id="storyTitle">The recall, step by step</h2>
+      <ol class="chapters" id="chapters"></ol>
+    </div>
+    <!-- One step, start to finish: every write to Atlas, the call, the read-back, any repair. -->
+    <aside id="trace" aria-label="Step trace" hidden>
+      <div class="tbar">
+        <button class="btn" id="traceBack" type="button">← Back to the recall</button>
+        <span class="nav">
+          <button class="btn" id="tracePrev" type="button">‹ Step before</button>
+          <button class="btn" id="traceNext" type="button">Step after ›</button>
+          <button class="btn" id="traceNextProblem" type="button">Next problem ›</button>
+        </span>
+      </div>
+      <div id="traceBody"></div>
+      <div class="live" id="traceLive">
+        <h3>What the real system says now</h3>
+        <p class="cap">Everything above is Tracer's own record in Atlas. This asks the business system for its
+          record, with the same read-back the agent uses, so the two can be compared. It is a GET: nothing changes.</p>
+        <button class="btn" id="liveBtn" type="button">Read the record now</button>
+        <div id="traceLiveOut"></div>
+      </div>
+    </aside>
   </section>
   <div class="side">
     <section aria-labelledby="worldTitle">
       <h2 id="worldTitle">Where the product is</h2>
+      <p class="hint">One tile is one step. Click a tile to trace it.</p>
       <div class="world" id="world"><p class="empty">Nothing found yet. Press Start agent.</p></div>
+    </section>
+    <section aria-labelledby="troubleTitle">
+      <div class="loghead">
+        <h2 id="troubleTitle">Steps that hit a problem</h2>
+        <span class="count" id="troubleCount"></span>
+      </div>
+      <p class="empty" id="troubleEmpty">No steps yet.</p>
+      <ol id="trouble"></ol>
     </section>
     <section aria-labelledby="logTitle">
       <div class="loghead">
@@ -298,6 +412,7 @@ const CHAPTERS = [
 
 let rid = $("recall").value, source = null, S = null, STEPS = [], notes = {}, denied = [];
 let SCOPE = null, ESC = [];   // from the agent's `planned` events: what it found, and escalations
+let TRACE = { seq: null, raw: "", data: null };   // the step open in the trace panel, if any
 
 // Plain words for what each system reported and what Tracer decided.
 const STATUS_WORD = { available: "on the shelf", open: "open", shipped: "on a truck", delivered: "in a home",
@@ -395,8 +510,14 @@ function addEvent(ev, fresh) {
   const when = ev.at ? new Date(/[zZ]|[+-]\d\d:\d\d$/.test(ev.at) ? ev.at : ev.at + "Z") : null;
   const time = el("time", null, when ? when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "");
   time.dateTime = ev.at || "";
-  li.append(time, el("span", tone, text));
-  const tech = { event: ev.event, seq: ev.seq, key: ev.step_key, policy: ev.policy_reason, detail: ev.detail };
+  const line = el("span", tone, text);
+  if (ev.seq != null) {   // a step event: its number opens that step's trace
+    const b = el("button", "seqlink", `#${ev.seq}`);
+    b.type = "button"; b.title = `Trace step ${ev.seq}`; b.onclick = () => openTrace(ev.seq);
+    line.prepend(b);
+  }
+  li.append(time, line);
+  const tech ={ event: ev.event, seq: ev.seq, key: ev.step_key, policy: ev.policy_reason, detail: ev.detail };
   li.append(el("span", "tech", JSON.stringify(tech, (k, v) => v ?? undefined)));
   $("log").prepend(li);
   while ($("log").children.length > 400) $("log").lastChild.remove();
@@ -712,28 +833,395 @@ function renderChapters() {
   });
 }
 
+// Tiles are built once per set of steps, then updated in place: the page polls every
+// second, and a tile swapped out mid-click would lose the click that opens its trace.
+let WORLD = { key: "", tiles: new Map(), heads: {} };
 function renderWorld() {
   const w = $("world");
-  if (!STEPS.length) { w.replaceChildren(el("p", "empty", "Nothing found yet. Press Start agent.")); return; }
-  const c = counts(); w.replaceChildren();
-  for (const a of ORDER) {
-    const g = el("div", "group"), h = el("h4", null, A[a].group);
-    const n = el("span", c[a].handled === c[a].total ? "all" : "", `${c[a].handled}/${c[a].total}`);
-    h.append(n); g.append(h);
-    const tiles = el("div", "tiles");
-    for (const s of STEPS.filter((x) => x.action === a)) {
-      const tile = el("div", `tile ${isEscalated(s) ? "escalated" : s.status}`, s.target_id.replace(/^[A-Z]+-0*/, ""));
-      tile.title = `${s.target_id}: ${isEscalated(s) ? "escalated" : s.status}${s.attempts > 1 ? `, ${s.attempts} attempts` : ""}${s.last_error ? ` (${s.last_error})` : ""}`;
-      if (s.attempts > 1) tile.append(el("sup", null, s.attempts));
-      tiles.append(tile);
+  if (!STEPS.length) { WORLD.key = ""; w.replaceChildren(el("p", "empty", "Nothing found yet. Press Start agent.")); return; }
+  const key = rid + "|" + STEPS.map((s) => `${s.seq}:${s.target_id}`).join(",") + "|" + denied.map((d) => d.target_id).join(",");
+  if (key !== WORLD.key) {
+    WORLD = { key, tiles: new Map(), heads: {} };
+    w.replaceChildren();
+    for (const a of ORDER) {
+      const g = el("div", "group"), h = el("h4", null, A[a].group), n = el("span");
+      h.append(n); g.append(h); WORLD.heads[a] = n;
+      const tiles = el("div", "tiles");
+      for (const s of STEPS.filter((x) => x.action === a)) {
+        const tile = el("button", "tile"), sup = el("sup");
+        tile.type = "button";
+        tile.append(document.createTextNode(s.target_id.replace(/^[A-Z]+-0*/, "")), sup);
+        tile.onclick = () => openTrace(s.seq);
+        WORLD.tiles.set(s.seq, { tile, sup });
+        tiles.append(tile);
+      }
+      for (const d of denied.filter((x) => x.action === a)) {
+        const tile = el("div", "tile refused", d.target_id.replace(/^[A-Z]+-0*/, ""));
+        tile.title = `${d.target_id}: refused, different lot`;
+        tiles.append(tile);
+      }
+      g.append(tiles); w.append(g);
     }
-    for (const d of denied.filter((x) => x.action === a)) {
-      const tile = el("div", "tile refused", d.target_id.replace(/^[A-Z]+-0*/, ""));
-      tile.title = `${d.target_id}: refused, different lot`;
-      tiles.append(tile);
-    }
-    g.append(tiles); w.append(g);
   }
+  const c = counts();
+  for (const a of ORDER) {
+    const n = WORLD.heads[a];
+    n.className = c[a].handled === c[a].total ? "all" : ""; n.textContent = `${c[a].handled}/${c[a].total}`;
+  }
+  for (const s of STEPS) {
+    const v = WORLD.tiles.get(s.seq); if (!v) continue;
+    const st = isEscalated(s) ? "escalated" : s.status;
+    v.tile.className = `tile ${st}${TRACE.seq === s.seq ? " sel" : ""}`;
+    v.tile.title = `Step ${s.seq}, ${s.target_id}: ${st}${s.attempts > 1 ? `, ${s.attempts} attempts` : ""}${s.last_error ? ` (${s.last_error})` : ""}. Click to trace it.`;
+    v.sup.textContent = s.attempts > 1 ? s.attempts : ""; v.sup.hidden = !(s.attempts > 1);
+  }
+}
+
+// ---------- steps that hit a problem ----------
+// The server tags a step from its audit entries, because a step that failed, was retried
+// and then verified looks clean in `steps`. This list is where a developer starts.
+const capFirst = (s) => (s ? s[0].toUpperCase() + s.slice(1) : "");
+const statusWord = (s) => isEscalated(s) ? "escalated"
+  : s.status === "verified" && s.attempts > 1 ? `verified on attempt ${s.attempts}` : s.status;
+let troubleKey = null;
+function renderTrouble() {
+  const rows = STEPS.filter((s) => s.tags?.length);
+  const key = JSON.stringify(rows.map((s) => [s.seq, s.status, s.attempts, s.tags])) + `|${STEPS.length}|${TRACE.seq}`;
+  if (key === troubleKey) return;   // unchanged: leave the buttons alone
+  troubleKey = key;
+  $("troubleCount").textContent = rows.length ? `${rows.length} of ${STEPS.length}` : "";
+  $("troubleEmpty").hidden = rows.length > 0;
+  $("troubleEmpty").textContent = STEPS.length
+    ? "Every step so far went through first time. Press a disruption in the story, then open the step here."
+    : "No steps yet.";
+  const ol = $("trouble"); ol.replaceChildren();
+  for (const s of rows) {
+    const li = el("li"), b = el("button", `trow${TRACE.seq === s.seq ? " sel" : ""}`), tags = el("span", "tags");
+    b.type = "button"; b.onclick = () => openTrace(s.seq);
+    for (const t of s.tags) tags.append(el("span", `tag ${t.kind}`, t.label));
+    b.append(el("span", "seq", `#${s.seq}`), el("span", "what", `${capFirst(A[s.action]?.noun)} ${s.target_id}`),
+             el("span", "st", statusWord(s)), tags);
+    li.append(b); ol.append(li);
+  }
+}
+
+// ---------- step trace: everything Atlas holds about one step, in order ----------
+const ORIGIN = {
+  default: "the default CallSpec",
+  llm_trial: "Claude's proposed fix, on trial for this one step",
+  memory_trial: "a fix from vector memory, on trial for this one step",
+  llm_proven: "Claude's fix, proven earlier in this run",
+  memory_proven: "the fix from memory, proven earlier in this run",
+};
+const asDate = (s) => (s ? new Date(/[zZ]|[+-]\d\d:\d\d$/.test(s) ? s : s + "Z") : null);
+const clock = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
+  + "." + String(d.getMilliseconds()).padStart(3, "0");
+const gap = (ms) => ms < 1000 ? `+${Math.round(ms)} ms` : ms < 60000 ? `+${(ms / 1000).toFixed(1)} s` : `+${fmtDur(ms)}`;
+const wire = (lines) => el("pre", "wire", lines.filter((x) => x != null && x !== "").join("\n"));
+const callWire = (c) => wire([`${c.method} ${c.path}`, `Idempotency-Key: ${c.headers["Idempotency-Key"]}`,
+                              c.body ? JSON.stringify(c.body) : null]);
+function readWire(rb, observed, recordId) {
+  const q = rb.query ? "?" + Object.entries(rb.query).map(([k, v]) => `${k}=${v}`).join("&") : "";
+  const want = (rb.expect || []).map((x) => JSON.stringify(x)).join(" or ");
+  return wire([`GET ${rb.path}${q}`,
+    rb.field === "$count" ? `expect    exactly ${want} record for this key` : `expect    ${rb.field} = ${want}`,
+    ...Object.entries(rb.match || {}).map(([k, v]) => `          ${k} = ${JSON.stringify(v)}`),
+    observed != null ? `observed  ${observed}` : null,
+    recordId ? `record    ${recordId}` : null]);
+}
+
+function openTrace(seq) {
+  TRACE = { seq, raw: "", data: null };
+  $("story").hidden = true; $("trace").hidden = false;
+  $("traceBody").replaceChildren(el("p", "empty", `Loading step ${seq}…`));
+  $("traceLiveOut").replaceChildren();
+  renderWorld(); renderTrouble(); loadTrace();
+  if (matchMedia("(max-width: 980px)").matches) $("trace").scrollIntoView({ block: "start" });
+  else $("trace").scrollTop = 0;
+}
+function closeTrace() {
+  if (TRACE.seq == null) return;
+  TRACE = { seq: null, raw: "", data: null };
+  $("trace").hidden = true; $("story").hidden = false;
+  renderWorld(); renderTrouble();
+}
+
+// Polled with the rest of the page while a step is open, so an in-flight step fills in
+// live. Re-rendered only when Atlas returns something different.
+async function loadTrace() {
+  const seq = TRACE.seq; if (seq == null || TRACE.busy) return;
+  const mine = TRACE; mine.busy = true;   // one request at a time per open step
+  try {
+    const r = await fetch(`/trace?recall_id=${rid}&seq=${seq}`), raw = await r.text();
+    mine.busy = false;
+    if (mine !== TRACE || raw === TRACE.raw) return;
+    TRACE.raw = raw;
+    $("traceLive").hidden = !r.ok;
+    if (!r.ok) {
+      TRACE.data = null;
+      // FastAPI's own 404 ("Not Found") means the route is missing: a server started before
+      // the trace existed. Ours says the step is missing.
+      const old = /"detail":\s*"Not Found"/.test(raw);
+      $("traceBody").replaceChildren(el("p", "empty", old
+        ? "This live log server was started before step tracing was added. Restart it, then open the step again."
+        : `Step ${seq} is not in Atlas. The recall was reset, or has not been planned yet.`));
+      return;
+    }
+    TRACE.data = JSON.parse(raw); renderTrace(TRACE.data);
+  } catch (e) { mine.busy = false; /* the next poll tries again */ }
+}
+
+function outcomeSentence(t) {
+  const st = t.step, a = A[st.action] || {}, id = st.target_id;
+  if (st.status === "verified")
+    return `${a.done?.(id) ?? id}. ` + (st.proof?.source === "reconcile"
+      ? "Tracer found it already done by reading the record, and did not send it again."
+      : `Confirmed by reading the ${a.record || "record"} back${st.attempts > 1 ? `, on attempt ${st.attempts}` : ""}.`);
+  if (isEscalated(st))
+    return st.last_error.startsWith("already shipped")
+      ? `Order ${id} left on a truck before it could be cancelled, so it was handed to a new step that stops the shipment.`
+      : `Order ${id} was delivered before it could be cancelled. Its customer is on the notice list.`;
+  if (st.status === "failed")
+    return `Not done after ${pl(st.attempts, "attempt", "attempts")}. `
+      + (t.agent_running ? "The agent comes back to it with the same idempotency key." : "It is waiting for a restart or a person.");
+  if (st.status === "sent")
+    return t.agent_running
+      ? "In flight: saved as sent, waiting for the call and the read-back."
+      : "In doubt: saved as sent, but no outcome was recorded, so the agent may or may not have acted. A restart checks the real system before anything else.";
+  return "Planned, not attempted yet.";
+}
+
+// One row per audit entry of the step, each with what the agent did and why it does it that way.
+function traceRows(t) {
+  const st = t.step, a = A[st.action] || {}, evs = t.events, rows = [];
+  const sys = a.system || st.system;
+  const nextOwn = (i) => evs.slice(i + 1).find((x) => !x.context) || null;
+  let call = null;   // the call of the latest `sent`: its read-back half explains the outcome that follows
+
+  const planned = { at: st.created_at, tone: "quiet", title: "Planned", parts: [] };
+  if (t.why?.escalation) planned.parts.push(el("p", "fact", t.why.escalation.reason));
+  else if (t.why?.reason) planned.parts.push(el("p", "fact", t.why.reason));
+  planned.parts.push(el("p", null, "Its idempotency key is fixed here and never changes, through every retry and restart."));
+  rows.push(planned);
+
+  evs.forEach((ev, i) => {
+    const d = ev.detail || {}, err = d.error || "", next = nextOwn(i), died = !!evs[i + 1]?.context;
+    const row = { at: ev.at, tone: "quiet", title: ev.event, parts: [] };
+    const say = (text, cls) => { if (text) row.parts.push(el("p", cls || null, text)); };
+    switch (ev.event) {
+      case "lease_claimed":
+        row.tone = "warn"; row.title = "The agent process started again";
+        say("A new process, with no memory of the old one, claimed the lease in Atlas. Before anything new it reconciles every step left in sent, this one included.");
+        break;
+      case "sent": {
+        const n = d.attempt || 1;
+        call = ev.call || call;
+        row.tone = "sent"; row.title = `Saved as sent, attempt ${n}`;
+        say(`Policy gate: ${ev.policy_decision || "allow"}${ev.policy_reason ? ` (${ev.policy_reason})` : ""}.`, "fact");
+        say(n === 1
+          ? "Write-ahead: this status and its audit entry are committed to Atlas in one transaction before the call goes out. If the agent dies from here on, the database still knows the step may have happened."
+          : `Same idempotency key as attempt 1, so the ${sys} can tell it is the same request. Before sending again, Tracer reads the record back in case the earlier attempt landed after all.`);
+        if (n > 1 && next?.event === "reconciled" && !died) {
+          say("Nothing was sent on this attempt: that read showed the change was already there.", "fact");
+        } else if (ev.call) {
+          row.parts.push(el("p", "cap", `The call, rebuilt from ${ORIGIN[ev.call.origin] || "the CallSpec in force"}:`), callWire(ev.call));
+          if (died) say("The agent died after this write. The log alone cannot say whether the call went out, which is why the restart asks the real system instead of guessing.", "fact");
+          else if (!next) say(t.agent_running
+            ? "In flight: waiting for the response and the read-back."
+            : "No outcome was ever recorded for this attempt. The step stays in doubt until the agent restarts and reconciles it.", "fact");
+        }
+        break;
+      }
+      case "verified":
+        row.tone = "ok"; row.title = "Verified by reading the record back";
+        if (call?.readback) row.parts.push(readWire(call.readback, d.proof?.observed_status, d.proof?.read_back_id));
+        say(`A success response only means the ${sys} received the request. The step is verified because this read showed the change, and Atlas refuses a verified step that has no proof.`);
+        break;
+      case "reconciled": {
+        const afterRestart = !!evs[i - 1]?.context;
+        row.tone = "ok";
+        row.title = afterRestart ? "Reconciled after the restart: already done, not sent again" : "Already done: found by reading before sending again";
+        if (call?.readback) row.parts.push(readWire(call.readback, d.proof?.observed_status, d.proof?.read_back_id));
+        say(afterRestart
+          ? "Replaying the step would have done it twice, and skipping it could have left it undone. Reading the record by its idempotency key settles it without guessing."
+          : "The earlier attempt had landed after all, so sending again was not needed.");
+        break;
+      }
+      case "failed": {
+        row.tone = "fail";
+        const repairing = ["memory_hit", "repair_proposed", "repair_rejected"].includes(next?.event);
+        if (err.startsWith("read-back mismatch")) {
+          row.title = "Silent failure caught by the read-back";
+          const m = err.match(/^read-back mismatch: (\d+) but read-back shows (.*)$/);
+          if (m) say(`The call came back ${m[1]}, a success. Then the read-back:`, "fact");
+          if (call?.readback) row.parts.push(readWire(call.readback, m ? m[2] : err.replace(/^read-back mismatch: /, "")));
+          else say(err, "fact");
+          say(`The ${sys} answered with success, but the record did not change. An agent that trusts the status code would have counted this step as done.`);
+        } else if (err.startsWith("reconcile:")) {
+          row.title = "Reconciled after the restart: the call never landed";
+          if (call?.readback) row.parts.push(readWire(call.readback, err.replace(/^reconcile: /, "")));
+          say("Marked failed so the loop sends it again with the same idempotency key. Nothing is skipped.");
+        } else if (err.startsWith("already shipped")) {
+          row.tone = "warn"; row.title = "Too late to cancel: escalated";
+          say(capFirst(err) + ".", "fact");
+          say("The order system answered 409 because a truck had already collected the order. Sending again cannot change that, so Tracer plans a new step to stop the shipment instead.");
+        } else if (err.startsWith("already delivered")) {
+          row.tone = "warn"; row.title = "Too late to cancel: already delivered";
+          say(capFirst(err) + ".", "fact");
+        } else {
+          const code = (err.match(/→ (\d{3})/) || [])[1];
+          row.title = code ? `The ${sys} rejected the call (${code})` : "The call failed";
+          row.parts.push(wire([err]));
+          say(!code ? "No usable response. It is safe to send again, because the idempotency key stays the same."
+            : repairing ? "The request itself is wrong, so sending it again cannot help. Tracer looks for a repair: vector memory first, then Claude."
+            : /^4/.test(code) ? "The request was refused, so sending the same thing again cannot help."
+            : "A server error. It is safe to send again, because the idempotency key stays the same.");
+        }
+        break;
+      }
+      case "duplicate_detected":
+        row.tone = "fail"; row.title = "More than one notice exists for this customer";
+        say(capFirst(err) + ".", "fact");
+        say("Flagged for a person. Tracer does not try to take a notice back.");
+        break;
+      case "memory_hit":
+        row.tone = "ai"; row.title = `A proven fix was found in vector memory (match ${fmtScore(d.score)})`;
+        if (d.situation) row.parts.push(el("p", "cap", "Situation text searched with Atlas Vector Search:"), wire([d.situation]));
+        say("Only fixes that passed a read-back are stored. A match above 0.88 is reused, so no LLM call is made.");
+        break;
+      case "repair_proposed":
+        row.tone = "ai"; row.title = d.source === "memory" ? "The fix from memory goes on trial" : "Claude proposed a new call";
+        say(d.explanation, "fact");
+        if (d.spec) row.parts.push(el("p", "cap", "Proposed CallSpec:"), wire([JSON.stringify(d.spec, null, 2)]));
+        say("Only a candidate. A guard checks that it still targets the same record and proves the same thing, then it is tried on this one step and adopted only if the read-back passes.");
+        break;
+      case "repair_verified":
+        row.tone = "ok"; row.title = "The fix is proven on this step";
+        say(`${d.saved_to_memory ? "Saved to vector memory in Atlas for the next recall. " : ""}Used for every remaining ${a.noun || "step"} of this run.`);
+        break;
+      case "repair_rejected":
+        row.tone = "fail"; row.title = "The fix was rejected";
+        say(capFirst(d.reason || "") + ".", "fact");
+        say("Tracer does not keep guessing against a live system. The remaining steps of this kind are left for a person.");
+        break;
+      case "planned":
+        row.tone = "warn"; row.title = "A new step was planned: stop the shipment instead";
+        say(d.escalation?.reason, "fact");
+        {
+          const to = STEPS.find((s) => s.action === "intercept_shipment" && s.target_id === d.escalation?.tracking_no);
+          if (to) {   // follow the problem into the step that took it over
+            const b = el("button", "btn", `Trace step ${to.seq}: shipment ${to.target_id} ›`);
+            b.type = "button"; b.style.marginTop = "8px"; b.onclick = () => openTrace(to.seq);
+            row.parts.push(b);
+          }
+        }
+        break;
+      case "denied":
+        row.tone = "warn"; row.title = "Refused by the policy gate";
+        say(capFirst(ev.policy_reason || "") + ".", "fact");
+        break;
+      case "paused":
+        row.tone = "warn"; row.title = "Held here until a person said go";
+        say("The pause flag in Atlas was set: a reviewer paused the recall, or it was waiting for the supplier to approve the plan. The agent checks the flag before every step, holds its lease and its place, and carries on from this step when released.");
+        break;
+    }
+    rows.push(row);
+  });
+  return rows;
+}
+
+function renderTrace(t) {
+  const st = t.step, body = $("traceBody");
+  const open = [...body.querySelectorAll("details")].map((d) => d.open);
+  const state = isEscalated(st) ? "escalated" : st.status;
+  const title = el("h2", "ttitle", st.target_id);
+  title.append(el("span", `pill ${state}`, state));
+  const out = [el("p", "kicker", `Step ${st.seq} of ${STEPS.length || st.seq} · ${st.action} · ${st.system}`), title,
+               el("p", "outcome", outcomeSentence(t))];
+
+  const tags = STEPS.find((s) => s.seq === st.seq)?.tags || [];
+  if (tags.length) {
+    const box = el("div", "tags");
+    for (const g of tags) box.append(el("span", `tag ${g.kind}`, g.label));
+    out.push(box);
+  }
+
+  const dl = el("dl", "facts");
+  const fact = (k, v, mono) => {
+    if (v == null || v === "") return;
+    const dd = el("dd"); dd.append(mono ? el("code", null, v) : document.createTextNode(v));
+    dl.append(el("dt", null, k), dd);
+  };
+  fact("Idempotency key", st.idempotency_key, true);
+  fact("Attempts", String(st.attempts ?? 0));
+  if (st.proof) fact("Proof in Atlas", `${st.proof.observed_status}, record ${st.proof.read_back_id}, by ${st.proof.source === "reconcile" ? "reconcile" : "read-back"}`);
+  fact("Last error", st.last_error);
+  out.push(dl, el("h3", null, "What happened, in order"));
+
+  const ol = el("ol", "tl"); let prev = null;
+  for (const row of traceRows(t)) {
+    const li = el("li", row.tone), at = asDate(row.at);
+    if (at) {
+      const when = el("div", "when", clock(at));
+      if (prev) when.append(el("b", null, gap(at - prev)));
+      li.append(when); prev = at;
+    }
+    li.append(el("h4", null, row.title), ...row.parts);
+    ol.append(li);
+  }
+  out.push(ol);
+
+  const own = t.events.filter((e) => !e.context).map(({ call, action, target_id, ...e }) => e);
+  const rawStep = el("details", "raw"), rawAudit = el("details", "raw");
+  rawStep.append(el("summary", null, "The step document in Atlas (steps)"), wire([JSON.stringify(st, null, 2)]));
+  rawAudit.append(el("summary", null, `Its ${pl(own.length, "audit entry", "audit entries")} in Atlas (audit_log)`),
+                  wire([JSON.stringify(own, null, 2)]));
+  out.push(el("h3", null, "The documents"), rawStep, rawAudit);
+
+  body.replaceChildren(...out);
+  body.querySelectorAll("details").forEach((d, k) => { d.open = !!open[k]; });
+  if (TRACE.liveFor && TRACE.liveFor !== st.status) {   // the step moved on: that reading is out of date
+    $("traceLiveOut").replaceChildren(); TRACE.liveFor = null;
+  }
+
+  const at = STEPS.findIndex((s) => s.seq === st.seq);
+  $("tracePrev").disabled = at <= 0;
+  $("traceNext").disabled = at < 0 || at >= STEPS.length - 1;
+  $("traceNextProblem").disabled = !STEPS.some((s) => s.tags?.length && s.seq !== st.seq);
+}
+
+function traceStep(delta) {
+  const at = STEPS.findIndex((s) => s.seq === TRACE.seq), to = STEPS[at + delta];
+  if (at >= 0 && to) openTrace(to.seq);
+}
+function traceNextProblem() {
+  const hit = STEPS.filter((s) => s.tags?.length && s.seq !== TRACE.seq);
+  const to = hit.find((s) => s.seq > TRACE.seq) || hit[0];   // wraps round to the first
+  if (to) openTrace(to.seq);
+}
+
+// Compare Atlas with the business system as it is right now (a read-only GET).
+async function liveCheck() {
+  const seq = TRACE.seq, out = $("traceLiveOut");
+  if (seq == null || !TRACE.data) return;
+  out.replaceChildren(el("p", "cap", "Reading…"));
+  try {
+    const r = await fetch(`/trace/live?recall_id=${rid}&seq=${seq}`), j = await r.json().catch(() => ({}));
+    if (seq !== TRACE.seq) return;
+    if (!r.ok) { out.replaceChildren(el("p", "verdict bad", `Couldn't read it: ${j.detail || r.status}`)); return; }
+    const st = TRACE.data.step, sys = A[st.action]?.system || st.system, done = st.status === "verified";
+    TRACE.liveFor = st.status;
+    let text = JSON.stringify(j.body, null, 2);
+    if (text.length > 2400) text = text.slice(0, 2400) + "\n…";
+    let verdict, cls;
+    if (j.duplicate) [verdict, cls] = [`✗ More than one record: ${j.observed}.`, "bad"];
+    else if (j.verified && done) [verdict, cls] = [`✓ The ${sys} shows the change right now (${j.observed}). It agrees with the proof in Atlas.`, "good"];
+    else if (j.verified) [verdict, cls] = [`The ${sys} already shows the change (${j.observed}), but Atlas has not marked this step verified. A restart reconciles it without sending again.`, "warn"];
+    else if (done) [verdict, cls] = [`✗ The ${sys} does not show the change right now (${j.observed}). That disagrees with the proof in Atlas.`, "bad"];
+    else [verdict, cls] = [`The ${sys} does not show the change (${j.observed}). That matches Atlas: this step is not verified.`, "info"];
+    out.replaceChildren(wire([`GET ${j.url}   →   ${j.status}`, text]), el("p", `verdict ${cls}`, verdict),
+                        el("p", "cap", `Read at ${clock(asDate(j.at))}.`));
+  } catch (e) { out.replaceChildren(el("p", "verdict bad", "Couldn't reach the live log server.")); }
 }
 
 function renderHeader() {
@@ -761,7 +1249,7 @@ async function refresh() {
     ]);
     S = s; STEPS = steps;
     window.pickupAt = s.pickup_at ? new Date(s.pickup_at) : null;
-    renderHeader(); renderChapters(); renderWorld();
+    renderHeader(); renderChapters(); renderWorld(); renderTrouble(); loadTrace();
   } catch (e) {
     $("agentText").textContent = "Live log server unreachable";
   }
@@ -804,8 +1292,15 @@ $("wipeBtn").onclick = async () => {
   if (await post("/reset", { wipe_memory: true }, "Reset. Memory wiped.")) load();
 };
 $("techToggle").onchange = (e) => document.body.classList.toggle("show-tech", e.target.checked);
+$("traceBack").onclick = closeTrace;
+$("tracePrev").onclick = () => traceStep(-1);
+$("traceNext").onclick = () => traceStep(1);
+$("traceNextProblem").onclick = traceNextProblem;
+$("liveBtn").onclick = liveCheck;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTrace(); });
 
 async function load() {
+  closeTrace();   // a trace belongs to one recall, and a reset removes its step
   notes = {}; denied = []; SCOPE = null; ESC = []; CH = null; $("log").replaceChildren();
   const r = RECALLS[rid];
   const p = $("problem"); p.replaceChildren(el("strong", null, r.problem), document.createTextNode(r.risk));

@@ -23,7 +23,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from agent.config import RECALLS as CATALOGUE
+from agent.callspecs import ACTIONS as ACTION_VERB, DEFAULT_SPECS, fill
+from agent.clients import Systems
+from agent.config import RECALLS as CATALOGUE, Settings
+from agent.reconcile import step_values
 from store.db import db
 from web import voice
 
@@ -186,9 +189,222 @@ def state(recall_id: str):
 
 @app.get("/steps")
 def steps(recall_id: str):
-    """Every step of a recall, for the world panel (one tile per case, order, truck, household)."""
-    fields = {"seq": 1, "action": 1, "target_id": 1, "status": 1, "attempts": 1, "last_error": 1, "proof": 1}
-    return [_json(s) for s in db.steps.find({"recall_id": recall_id}, fields).sort("seq", 1)]
+    """Every step of a recall, for the world panel (one tile per case, order, truck, household).
+
+    Each step also carries `tags`: what went wrong on the way, read from its audit entries.
+    A step that was retried and then verified looks clean in `steps` (last_error is cleared),
+    so the audit log is the only place that still knows it had trouble.
+    """
+    fields = {"seq": 1, "action": 1, "target_id": 1, "status": 1, "attempts": 1, "last_error": 1,
+              "proof": 1, "idempotency_key": 1, "updated_at": 1}
+    history: dict[str, list[dict]] = {}
+    for row in db.audit_log.aggregate([
+        {"$match": {"recall_id": recall_id, "step_key": {"$ne": None},
+                    "event": {"$nin": ["sent", "verified"]}}},   # the two events every clean step has
+        {"$sort": {"at": 1}},
+        {"$group": {"_id": "$step_key",
+                    "h": {"$push": {"e": "$event", "err": "$detail.error", "src": "$detail.source"}}}},
+    ]):
+        history[row["_id"]] = row["h"]
+    running = _agent_running_for(recall_id)
+    out = []
+    for s in db.steps.find({"recall_id": recall_id}, fields).sort("seq", 1):
+        doc = _json(s)
+        doc["tags"] = _tags(s, history.get(s["idempotency_key"], []), running)
+        out.append(doc)
+    return out
+
+
+# ---------- developer trace: one step, start to finish ----------
+
+SCOPE_KEY = {"hold_inventory": "warehouse", "cancel_order": "orders",
+             "intercept_shipment": "carrier", "notify_customer": "customers"}
+HANDLED_ELSEWHERE = ("already shipped", "already delivered")
+
+
+def _tags(step: dict, history: list[dict], running: bool) -> list[dict]:
+    """Why a developer would open this step: [{kind, label}]. Empty for a step that went
+    planned → sent → verified first time."""
+    tags: list[dict] = []
+
+    def add(kind: str, label: str) -> None:
+        if not any(t["label"] == label for t in tags):
+            tags.append({"kind": kind, "label": label})
+
+    for h in history:
+        event, err = h["e"], h.get("err") or ""
+        if event == "failed":
+            if err.startswith("read-back mismatch"):
+                add("fail", "said OK, nothing changed")
+            elif err.startswith("reconcile:"):
+                add("fail", "crash before the call landed")
+            elif err.startswith("already shipped"):
+                add("warn", "truck left first: escalated")
+            elif err.startswith("already delivered"):
+                add("warn", "delivered before the cancel")
+            elif "no response" in err:
+                add("fail", "no response")
+            else:
+                add("fail", "call rejected")
+        elif event == "reconciled":
+            add("ok", "found already done, not resent")
+        elif event == "duplicate_detected":
+            add("fail", "duplicate notice")
+        elif event == "memory_hit":
+            add("ai", "fix from memory")
+        elif event == "repair_proposed" and h.get("src") == "llm":
+            add("ai", "Claude proposed a fix")
+        elif event == "repair_verified":
+            add("ok", "fix proven here")
+        elif event == "repair_rejected":
+            add("fail", "fix rejected")
+        elif event == "denied":
+            add("warn", "refused by policy")
+
+    # What the step's own state says. "Stale" keeps a step that is simply in flight
+    # (sent a moment ago, read-back still to come) off the problem list.
+    updated = step.get("updated_at")
+    stale = not updated or (datetime.now(timezone.utc) - updated).total_seconds() > 5
+    if step["status"] == "sent" and not running and stale:
+        add("fail", "in doubt: sent, outcome never checked")
+    if (step["status"] == "failed" and not running
+            and not (step.get("last_error") or "").startswith(HANDLED_ELSEWHERE)):
+        add("fail", "left for a person")
+    if not tags and step.get("attempts", 0) > 1:
+        add("warn", f"{step['attempts']} attempts")
+    return tags
+
+
+def _spec_at_each_send(action: str, log: list[dict]) -> dict:
+    """Which CallSpec each `sent` of this action used: {audit _id: (spec, origin)}.
+
+    The audit log records that a call went out, not its bytes. But the agent builds every
+    call from a CallSpec, and the log shows each moment that spec changed: a repair proposed
+    (on trial), proven (adopted) or rejected, and a restart (a new process starts from the
+    defaults). Replaying those events in order gives the spec in force at every send.
+    """
+    verb = ACTION_VERB[action][1]
+    current, trial = (DEFAULT_SPECS[action], "default"), None
+    out = {}
+    for e in log:
+        if e["event"] == "lease_claimed":
+            current, trial = (DEFAULT_SPECS[action], "default"), None
+            continue
+        parts = (e.get("step_key") or "").split(":")
+        if len(parts) != 3 or parts[1] != verb:
+            continue
+        detail = e.get("detail") if isinstance(e.get("detail"), dict) else {}
+        if e["event"] == "repair_proposed" and isinstance(detail.get("spec"), dict):
+            trial = (detail["spec"], f"{detail.get('source', 'llm')}_trial")
+        elif e["event"] == "repair_rejected":
+            trial = None
+        elif e["event"] == "repair_verified" and trial:
+            current, trial = (trial[0], trial[1].replace("_trial", "_proven")), None
+        elif e["event"] == "sent":
+            out[e["_id"]] = trial or current
+    return out
+
+
+def _render_call(spec: dict, origin: str, values: dict, key: str) -> dict:
+    """A CallSpec with this step's values filled in: the request, and how it is proven."""
+    return {
+        "origin": origin,
+        "method": str(spec.get("method", "")).upper(),
+        "path": fill(spec.get("path", ""), values),
+        "headers": {"Idempotency-Key": key},
+        "body": fill(spec.get("body"), values),
+        "readback": {"path": fill(spec.get("readback_path", ""), values),
+                     "query": fill(spec.get("readback_query"), values),
+                     "field": spec.get("readback_field"),
+                     "expect": spec.get("readback_expect"),
+                     "match": fill(spec.get("readback_match") or {}, values)},
+    }
+
+
+def _why_planned(step: dict, log: list[dict]) -> dict | None:
+    """The reason this step exists: the scope decision for its target, or the escalation
+    that created it mid-run."""
+    for e in log:
+        detail = e.get("detail") if isinstance(e.get("detail"), dict) else {}
+        esc = detail.get("escalation")
+        if e["event"] == "planned" and esc and esc.get("tracking_no") == step["target_id"] \
+                and step["action"] == "intercept_shipment":
+            return {"escalation": _plain(esc)}
+    for e in log:
+        detail = e.get("detail") if isinstance(e.get("detail"), dict) else {}
+        if e["event"] == "planned" and detail.get("scope"):
+            items = detail["scope"].get(SCOPE_KEY.get(step["action"], ""), [])
+            item = next((i for i in items if i.get("id") == step["target_id"]), None)
+            return _plain(item) if item else None
+    return None
+
+
+def _trace_step(recall_id: str, seq: int) -> tuple[dict, dict, list[dict]]:
+    recall = CATALOGUE.get(recall_id)
+    step = db.steps.find_one({"recall_id": recall_id, "seq": seq}) if recall else None
+    if not step:
+        raise HTTPException(404, "no such step (was the recall reset?)")
+    # One recall's log is a few hundred small entries: fetch it in a single batch (the default
+    # first batch is 101 documents, and a second round trip to Atlas doubles the wait).
+    log = list(db.audit_log.find({"recall_id": recall_id}).sort("at", 1).batch_size(2000))
+    return step, step_values(recall, step), log
+
+
+@app.get("/trace")
+def trace(recall_id: str, seq: int):
+    """Everything Atlas holds about one step, in the order it happened.
+
+    Its own audit entries, plus any agent restart that fell between them (that is what a
+    crash looks like from inside one step), plus the call each `sent` made.
+    """
+    step, values, log = _trace_step(recall_id, seq)
+    key = step["idempotency_key"]
+    specs = _spec_at_each_send(step["action"], log)
+    mine = [e for e in log if e.get("step_key") == key]
+    first, last = (mine[0]["at"], mine[-1]["at"]) if mine else (None, None)
+    events = []
+    for e in log:
+        if e.get("step_key") == key:
+            row = _event(e)
+            if e["event"] == "sent" and e["_id"] in specs:
+                row["call"] = _render_call(*specs[e["_id"]], values, key)
+            events.append(row)
+        elif e["event"] == "lease_claimed" and first and first < e["at"] < last:
+            events.append({**_event(e), "context": True})
+    return {"step": _json(step), "events": events, "why": _why_planned(step, log),
+            "agent_running": _agent_running_for(recall_id)}
+
+
+@app.get("/trace/live")
+def trace_live(recall_id: str, seq: int):
+    """Ask the business system for this step's record right now. A GET: nothing changes.
+
+    It runs the read-back half of the CallSpec the step last used through the agent's own
+    read_back(), so the verdict is the same test that makes a step `verified`. A developer
+    uses it to compare what Atlas recorded with what the system says at this moment.
+    """
+    step, values, log = _trace_step(recall_id, seq)
+    specs = _spec_at_each_send(step["action"], log)
+    sends = [e["_id"] for e in log if e.get("step_key") == step["idempotency_key"] and e["event"] == "sent"]
+    spec = specs[sends[-1]][0] if sends else DEFAULT_SPECS[step["action"]]
+    urls = Settings.from_env().urls
+    path, query = fill(spec["readback_path"], values), fill(spec.get("readback_query"), values)
+    systems = Systems(urls, timeout=3)
+    try:
+        raw = httpx.get(f"{urls[step['system']]}{path}", params=query, timeout=3)
+        verdict = systems.read_back(step["system"], spec, values)
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"the {step['system']} system did not answer ({type(exc).__name__})") from exc
+    finally:
+        systems.close()
+    try:
+        body = raw.json()
+    except ValueError:
+        body = raw.text
+    return {"url": f"{path}{'?' + '&'.join(f'{k}={v}' for k, v in query.items()) if query else ''}",
+            "system": step["system"], "status": raw.status_code, "body": body,
+            "verified": verdict.verified, "observed": verdict.observed, "duplicate": verdict.duplicate,
+            "at": datetime.now(timezone.utc).isoformat()}
 
 
 def _recall_numbers(rid: str) -> dict:

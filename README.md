@@ -44,7 +44,7 @@ python -m store.setup_db        # collections, validators, indexes (safe to re-r
 scripts/run_demo.sh             # three mock systems + the live log
 ```
 
-Open the URL it prints. `/console` is the supplier's side: say what happened, approve the plan, read the report. `/` is the live log, with the disruption buttons. A full walk-through with expected results is in [docs/07-full-test.md](docs/07-full-test.md).
+Open the URL it prints. `/console` is the supplier's side: say what happened, approve the plan, read the report. `/` is the live log, with the disruption buttons; click any step there to trace it from plan to proof. A full walk-through with expected results is in [docs/07-full-test.md](docs/07-full-test.md).
 
 ```bash
 python -m scripts.prove_recall RC-GB-2611          # every system's own records vs what Tracer wrote in Atlas
@@ -75,4 +75,5 @@ python -m tests.test_agent_loop                    # agent loop tests
 - [x] Supplier lot records in Atlas (`store/catalogue.py`, `supplier_lots`): products, lots, QA findings, searched with Automated Embedding vector search
 - [x] Large synthetic world (`mocks/world.py`): ~650 lots, ~5,000 cases, 15,000 orders, 6,000 customers, ~13,000 shipments, so a recall is a needle in a haystack; `/stats` on each mock
 - [x] Recall proof script (`scripts/prove_recall.py`): read-only check that every business system agrees with what Tracer wrote in Atlas; unfinished runs keep their report as `needs_attention`
+- [x] Step trace on the live log (`/trace` in `web/app.py`, `web/index.html`): click any step to see every write to Atlas in order, the call rebuilt from the CallSpec in force, the read-back and its proof, each repair and restart, with the reason for each; a list of the steps that hit a problem, tagged from the audit log; and a read-only check of the business system's record against the proof in Atlas
 - [x] Voice in the supplier console (`web/voice.py`, `web/voice.js`): ElevenLabs voice agent that speaks through the same chat as typing, plus a narrator that reads Tracer's updates aloud

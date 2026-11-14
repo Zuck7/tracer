@@ -15,6 +15,19 @@
       "autoPort": false
     },
     {
+      "name": "dev",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WAREHOUSE_URL=http://localhost:8031",
+        "ORDERS_URL=http://localhost:8032",
+        "CARRIER_URL=http://localhost:8033",
+        "bash", "-c",
+        "trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM; P=.venv/bin/python; $P -m uvicorn mocks.warehouse:app --port 8031 --log-level warning & $P -m uvicorn mocks.orders:app --port 8032 --log-level warning & $P -m uvicorn mocks.carrier:app --port 8033 --log-level warning & $P -m uvicorn web.app:app --port 8035 --log-level warning & wait"
+      ],
+      "port": 8035,
+      "autoPort": false
+    },
+    {
       "name": "rehearsal",
       "runtimeExecutable": "env",
       "runtimeArgs": [
