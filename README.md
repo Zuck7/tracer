@@ -18,7 +18,9 @@ Full design, schemas and demo script: [docs/](docs/README.md) (start with [archi
 
 ## Stack
 
-Python, FastAPI and MongoDB Atlas (state, audit log, vector memory, change streams). The only non-MongoDB service is the LLM.
+Python, FastAPI and MongoDB Atlas: state, audit log, transactions, `$jsonSchema` validation, leases, change streams, TTL, and Vector Search with Automated Embedding (Voyage AI). Every byte of agent state lives in the `tracer` database; there is no other store.
+
+Outside services: Claude (Anthropic API) repairs changed API calls and reads the supplier's plain-language report, and ElevenLabs gives the supplier console an optional voice. Neither one decides which units, orders or customers are in scope: that is plain code behind a policy gate, because a recall is safety-critical.
 
 ## How it answers Track 3: Finish the Job
 
@@ -38,7 +40,7 @@ It also covers parts of the other two tracks: a supplier must approve the plan b
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env            # fill in MONGODB_URI and LLM_API_KEY
+cp .env.example .env            # fill in MONGODB_URI and LLM_API_KEY (ElevenLabs keys are optional)
 python -m scripts.check_setup   # checks .env, Atlas and keys without printing them
 python -m store.setup_db        # collections, validators, indexes (safe to re-run)
 scripts/run_demo.sh             # three mock systems + the live log
@@ -50,7 +52,7 @@ Open the URL it prints. `/console` is the supplier's side: say what happened, ap
 python -m scripts.prove_recall RC-GB-2611          # every system's own records vs what Tracer wrote in Atlas
 python -m scripts.check_exactly_once RC-GB-2611    # one notice per customer, checked in the notify system
 python -m scripts.compare_recalls                  # recall 1 vs recall 2: LLM calls and memory hits, from Atlas
-python -m tests.test_agent_loop                    # agent loop tests
+python -m pytest -q                                # 33 tests: agent loop (crash, silent failure, repair, memory), intake, voice; needs .env
 ```
 
 ## Built today

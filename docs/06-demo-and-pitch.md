@@ -9,7 +9,7 @@ Steps run in seq order: holds → cancels → **intercepts (31–38)** → **not
 ## Demo setup (every time)
 
 ```bash
-scripts/reset_demo.sh --wipe-memory       # clean mocks, clean Atlas (memory wiped for recall 1)
+python -m scripts.reset_demo --wipe-memory   # clean mocks, clean Atlas (memory wiped for recall 1)
 POST :8001/chaos {"drop_next_writes": 2}  # pre-armed, fires on the first holds
 POST :8003/chaos {"api_version": "v2"}    # pre-armed, fires at the first intercept
 STEP_DELAY_MS=600 CRASH_AT_SEQ=45 python -m agent.run --recall RC-GB-2611
@@ -71,7 +71,7 @@ Record it with a screen recorder at 1080p. Cut dead time. Captions help if the r
 
 ## Before round 1 judging (5:00–5:15)
 
-- [ ] `scripts/reset_demo.sh`, mocks and live log running, agent ready to start
+- [ ] `python -m scripts.reset_demo`, mocks and live log running, agent ready to start
 - [ ] Laptop on power, notifications off, font size up
 - [ ] Backup video open in a browser tab
 - [ ] Phone hotspot ready in case the Wi-Fi drops

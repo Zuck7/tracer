@@ -26,7 +26,7 @@ tracer/
 │   ├── orders.py       :8002
 │   └── carrier.py      :8003 (shipments + notifications)
 ├── web/                C · live log page, :8000
-├── scripts/            reset_demo.sh, run_mocks.sh, check_exactly_once.py
+├── scripts/            reset_demo.py, run_demo.sh, run_mocks.sh, check_exactly_once.py, prove_recall.py
 ├── docs/
 └── requirements.txt
 ```
@@ -69,7 +69,7 @@ uvicorn web.app:app --port 8000
 python -m agent.run --recall RC-GB-2611
 ```
 
-Reset before every demo run: `scripts/reset_demo.sh` (re-seeds mocks, clears `steps`, `audit_log`, `control`).
+Reset before every demo run: `python -m scripts.reset_demo` (re-seeds mocks, clears `steps`, `audit_log`, `control`).
 
 ## Code rules
 
