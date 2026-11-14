@@ -15,7 +15,11 @@ from pymongo import MongoClient
 
 load_dotenv()
 
-DB_NAME = "tracer"  # always explicit: the connection string may not name a database
+# Always explicit: the connection string may not name a database.
+# TRACER_DB lets each teammate test in a private copy (e.g. TRACER_DB=tracer_dev_a, then
+# `python -m store.setup_db`) so one person's reset doesn't wipe another's run.
+# The demo always uses "tracer".
+DB_NAME = os.environ.get("TRACER_DB", "tracer")
 
 _uri = os.environ.get("MONGODB_URI")
 if not _uri:

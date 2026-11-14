@@ -30,12 +30,14 @@ def make_key(recall_id: str, verb: str, target_id: str) -> str:
     return f"{recall_id}:{verb}:{target_id}"
 
 
-def _audit_doc(recall_id: str, event: str, step: dict | None = None, **extra: Any) -> dict:
+def _audit_doc(recall_id: str, event: str, step: dict | None = None, actor: str = ACTOR,
+               **extra: Any) -> dict:
     doc = {
         "recall_id": recall_id,
-        "step_id": step["_id"] if step else None,
-        "seq": step["seq"] if step else None,
-        "actor": ACTOR,
+        "step_id": step.get("_id") if step else None,   # None for a denied target (never became a step)
+        "step_key": step.get("idempotency_key") if step else None,
+        "seq": step.get("seq") if step else None,
+        "actor": actor,
         "event": event,
         "at": now(),
     }
@@ -43,9 +45,9 @@ def _audit_doc(recall_id: str, event: str, step: dict | None = None, **extra: An
     return doc
 
 
-def audit(recall_id: str, event: str, step: dict | None = None, **extra: Any) -> None:
+def audit(recall_id: str, event: str, step: dict | None = None, actor: str = ACTOR, **extra: Any) -> None:
     """Audit entry on its own, for events that don't change a step (denied, memory_hit, ...)."""
-    db.audit_log.insert_one(_audit_doc(recall_id, event, step, **extra))
+    db.audit_log.insert_one(_audit_doc(recall_id, event, step, actor, **extra))
 
 
 def insert_plan(steps: list[dict]) -> int:
@@ -87,7 +89,7 @@ def get_step(step_id: ObjectId) -> dict | None:
 
 
 def _transition(step_id: ObjectId, from_statuses: list[str], update: dict, event: str,
-                **audit_extra: Any) -> dict:
+                actor: str = ACTOR, **audit_extra: Any) -> dict:
     """Change a step's status and write its audit entry in one transaction.
 
     Raises ValueError if the step isn't in one of from_statuses, so an illegal
@@ -103,7 +105,8 @@ def _transition(step_id: ObjectId, from_statuses: list[str], update: dict, event
         if step is None:
             current = db.steps.find_one({"_id": step_id}, {"status": 1}, session=session)
             raise ValueError(f"step {step_id}: cannot go {current and current['status']} -> {event}")
-        db.audit_log.insert_one(_audit_doc(step["recall_id"], event, step, **audit_extra), session=session)
+        db.audit_log.insert_one(_audit_doc(step["recall_id"], event, step, actor, **audit_extra),
+                                session=session)
         return step
 
     with client.start_session() as session:

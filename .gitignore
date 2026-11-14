@@ -15,3 +15,6 @@ TRACER_HANDOFF.md
 
 # Agent local stand-in store (before Atlas is wired up)
 .tracer/
+
+# Live log server writes the agent output here
+agent.log

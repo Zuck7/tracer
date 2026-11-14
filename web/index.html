@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracer live log</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --ok: #3fb950; --sent: #58a6ff; --fail: #f85149; --warn: #d29922; --mem: #bc8cff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--line);
+           padding: 12px 16px; display: grid; gap: 10px; z-index: 1; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  h1 { font-size: 16px; margin: 0; }
+  h1 small { color: var(--muted); font-weight: normal; }
+  select, button { font: inherit; background: #21262d; color: var(--text); border: 1px solid var(--line);
+                   border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.danger { border-color: var(--fail); color: var(--fail); }
+  button.go { border-color: var(--ok); color: var(--ok); }
+  .stat { color: var(--muted); }
+  .stat b { color: var(--text); }
+  .stat b.done { color: var(--ok); }
+  #countdown { font-size: 18px; color: var(--warn); }
+  #countdown.late { color: var(--fail); }
+  #log { padding: 8px 16px 40px; }
+  .ev { display: grid; grid-template-columns: 70px 40px 120px 1fr; gap: 10px; padding: 3px 0;
+        border-bottom: 1px solid #161b22; animation: flash .8s ease-out; }
+  .ev .t, .ev .seq { color: var(--muted); }
+  .ev .e { font-weight: bold; }
+  .verified .e, .reconciled .e, .repair_verified .e { color: var(--ok); }
+  .sent .e { color: var(--sent); }
+  .failed .e, .duplicate_detected .e, .repair_rejected .e { color: var(--fail); }
+  .denied .e, .paused .e { color: var(--warn); }
+  .memory_hit .e, .repair_proposed .e { color: var(--mem); }
+  .reconciled, .repair_verified, .memory_hit, .duplicate_detected { background: #1c2128; }
+  @keyframes flash { from { background: #1f6feb33; } }
+  @media (max-width: 640px) {
+    .ev { grid-template-columns: 34px 1fr; }
+    .ev .t { display: none; }
+    .ev .e { grid-column: 2; }
+    .ev .d { grid-column: 1 / -1; padding-left: 44px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>Tracer <small>live log · state from MongoDB Atlas change stream</small></h1>
+    <select id="recall">
+      <option value="RC-GB-2611">RC-GB-2611 · granola bars · peanuts</option>
+      <option value="RC-OB-3107">RC-OB-3107 · oat bars · tree nuts</option>
+    </select>
+    <span>next truck pickup <span id="countdown">--:--</span></span>
+  </div>
+  <div class="row" id="stats"></div>
+  <div class="row">
+    <button class="go" onclick="startAgent()">▶ start agent</button>
+    <button class="danger" onclick="post('/agent/kill')">✖ kill agent (-9)</button>
+    <button onclick="chaos('warehouse', {drop_next_writes: 2})">drop 2 warehouse writes</button>
+    <button onclick="chaos('carrier', {api_version: 'v2'})">change carrier API</button>
+    <button id="pauseBtn" onclick="togglePause()">pause</button>
+    <button onclick="reset(false)">reset</button>
+    <button onclick="reset(true)">reset + wipe memory</button>
+    <span class="stat" id="status"></span>
+  </div>
+</header>
+<div id="log"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let rid = $("recall").value, source = null, paused = false, pickupAt = null;
+
+const LABEL = { hold_inventory: "held", cancel_order: "cancelled",
+                intercept_shipment: "intercepted", notify_customer: "notified" };
+
+function target(ev) {
+  if (!ev.step_key) return "";
+  const [, verb, id] = ev.step_key.split(":");
+  return `${verb} ${id}`;
+}
+
+function detail(ev) {
+  const d = ev.detail || {};
+  if (d.proof) return `proof: ${d.proof.observed_status}${d.proof.source === "reconcile" ? " (reconcile, not resent)" : ""}`;
+  if (d.error) return d.error;
+  if (d.attempt) return `attempt ${d.attempt}`;
+  if (ev.policy_reason && ev.event === "denied") return ev.policy_reason;
+  if (ev.count) return `${ev.count} steps planned`;
+  return ev.actor || "";
+}
+
+function add(ev) {
+  const div = document.createElement("div");
+  div.className = `ev ${ev.event}`;
+  const t = (ev.at || "").slice(11, 19);
+  div.innerHTML = `<span class="t">${t}</span><span class="seq">${ev.seq ? "#" + ev.seq : ""}</span>` +
+                  `<span class="e">${ev.event}</span><span class="d"></span>`;
+  div.querySelector(".d").textContent = `${target(ev)}  ${detail(ev)}`;
+  $("log").prepend(div);
+}
+
+async function load() {
+  $("log").innerHTML = "";
+  (await (await fetch(`/history?recall_id=${rid}`)).json()).forEach(add);
+  if (source) source.close();
+  source = new EventSource(`/events?recall_id=${rid}`);
+  source.onmessage = (m) => add(JSON.parse(m.data));
+}
+
+async function refresh() {
+  try {
+    const s = await (await fetch(`/state?recall_id=${rid}`)).json();
+    $("stats").innerHTML = Object.entries(s.counts).map(([a, c]) => {
+      const total = Object.values(c).reduce((x, y) => x + y, 0), ok = c.verified || 0;
+      return `<span class="stat">${LABEL[a]} <b class="${total && ok === total ? "done" : ""}">${ok}/${total}</b></span>`;
+    }).join("") + `<span class="stat">memory fixes <b>${s.memory_fixes}</b></span>` +
+      `<span class="stat">carrier API <b>${s.chaos.carrier ? s.chaos.carrier.api_version : "?"}</b></span>`;
+    paused = !!s.control.paused;
+    $("pauseBtn").textContent = paused ? "resume" : "pause";
+    $("status").textContent = `agent: ${s.agent_running ? "running" : "stopped"}` +
+      (s.control.status ? ` · recall ${s.control.status}` : "") + (paused ? " · PAUSED" : "");
+    pickupAt = s.pickup_at ? new Date(s.pickup_at) : null;
+  } catch (e) { $("status").textContent = "live log server unreachable"; }
+}
+
+function tick() {
+  if (!pickupAt) return;
+  const ms = pickupAt - Date.now(), late = ms < 0, a = Math.abs(ms) / 1000;
+  $("countdown").textContent = `${late ? "-" : ""}${String(Math.floor(a / 60)).padStart(2, "0")}:${String(Math.floor(a % 60)).padStart(2, "0")}`;
+  $("countdown").className = late ? "late" : "";
+}
+
+async function post(path, body = {}) {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" },
+                                body: JSON.stringify(body) });
+  const j = await r.json();
+  $("status").textContent = r.ok ? JSON.stringify(j) : `error: ${j.detail}`;
+  refresh();
+}
+const chaos = (service, body) => post("/chaos", { service, body });
+const startAgent = () => post("/agent/start", { recall_id: rid });
+const togglePause = () => post("/pause", { recall_id: rid, paused: !paused });
+async function reset(wipe) { await post("/reset", { wipe_memory: wipe }); load(); }
+
+$("recall").onchange = () => { rid = $("recall").value; load(); refresh(); };
+load(); refresh();
+setInterval(refresh, 1000);
+setInterval(tick, 250);
+</script>
+</body>
+</html>

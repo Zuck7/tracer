@@ -257,7 +257,7 @@ Status changes on `steps` and their audit entry are written **in one transaction
      "numCandidates": 50, "limit": 3}},
   {"$project": {"fix": 1, "situation": 1, "score": {"$meta": "vectorSearchScore"}}}
   ```
-  Treat it as a hit only if `score` ≥ a threshold you measure in the spike (start at 0.85). **Spike first:** confirm the sandbox supports `autoEmbed` and the exact text-query syntax. If not, call the Voyage API for embeddings and use a normal `vector` field.
+  **Verified in the sandbox at 12:16:** `autoEmbed` works, and both `"query": "<text>"` and `"query": {"text": "<text>"}` are accepted. Measured scores: same failure 0.93, same failure with a different ID 0.90, same endpoint with a different error 0.86, different system 0.71. Threshold: **0.88**. A new fix becomes searchable about 5 s after it's saved. Implemented in `store/memory.py` (`situation_text`, `find_fix`, `save_fix`).
 - TTL index `{created_at: 1}`, `expireAfterSeconds: 2592000` (30 days), so stale fixes age out.
 
 ### `control` (one document per recall)
