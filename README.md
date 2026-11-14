@@ -30,7 +30,8 @@ cp .env.example .env   # then fill in MONGODB_URI and LLM_API_KEY
 ## Built today
 
 - [ ] MongoDB collections with validators and indexes (`steps`, `audit_log`, `experiences`, `control`)
-- [ ] Agent orchestrator with policy gate
+- [x] Agent orchestrator with policy gate (`agent/`): CallSpecs, write-ahead `sent` before every call, read-back verification with proof, same-key retries, crash reconcile, lease and pause checks
+- [x] Agent loop tests against in-process fake systems (`tests/`): happy path, silent failure, crash after call, crash before call, lease, pause
 - [ ] Mock warehouse, orders and carrier + notify services with chaos toggles
 - [ ] Crash resume and read-back verification
 - [ ] API-change repair with vector memory

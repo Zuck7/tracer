@@ -12,3 +12,6 @@ TRACER_HANDOFF.md
 
 # Template is safe to commit
 !.env.example
+
+# Agent local stand-in store (before Atlas is wired up)
+.tracer/
