@@ -206,7 +206,7 @@
           <button data-demo="pickup">Truck collects an order early</button>
           <button data-demo="api">Carrier changes its system</button>
           <button data-demo="crash">Crash Tracer mid-action</button>
-          <button data-demo="reset">Reset the demo and clear the chat</button>
+          <button data-demo="reset">Reset everything</button>
         </div>
       </details>
     </div>
@@ -831,9 +831,18 @@ document.querySelectorAll("[data-demo]").forEach((b) => b.onclick = async () => 
   if (k === "api") { if (await post("/chaos", { service: "carrier", body: { api_version: "v2" } })) toast("Demo: the carrier changed its system."); }
   if (k === "crash") { if (await post("/agent/crash", { recall_id: rid })) toast("Demo: Tracer will die right after its next action."); }
   if (k === "reset") {
-    if (!confirm("Reset the demo? This clears every recall, puts the mock systems back to the start, and clears this chat.")) return;
-    if (await post("/reset", { wipe_memory: false })) { items = []; rid = null; save(); greet(); await follow(); toast("Demo reset."); }
+    // One button for the whole starting state: the recalls in Atlas, the mock systems (cases back
+    // on the shelf, orders open again, no notices sent), the fixes Tracer learned, and this chat.
+    if (!confirm("Reset everything? This clears every recall, puts the warehouse, orders and carrier back to the start, forgets the fixes Tracer learned, and clears this chat.")) return;
+    if (await post("/reset", { wipe_memory: true })) { items = []; rid = null; save(); greet(); await follow(); toast("Everything is back to the start."); }
   }
+});
+
+// The agent log's reset removes the chat from this browser's storage. If this page is open in
+// another tab, drop its copy as well, or the next message would write the old chat back.
+window.addEventListener("storage", async (e) => {
+  if (e.key !== STORE_KEY || e.newValue !== null) return;
+  items = []; rid = null; greet(); renderThread(true); await follow();
 });
 
 function greet() {

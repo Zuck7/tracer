@@ -294,8 +294,8 @@
     <button class="btn go" id="startBtn">Start agent</button>
     <button class="btn stop" id="killBtn">Kill agent (-9)</button>
     <button class="btn" id="pauseBtn">Pause</button>
-    <button class="btn" id="resetBtn">Reset</button>
-    <button class="btn quiet" id="wipeBtn">Reset and forget learned fixes</button>
+    <button class="btn" id="resetBtn">Reset everything</button>
+    <button class="btn quiet" id="keepBtn" title="For the memory test: start over, but let recall 2 find the fix recall 1 saved">Reset, keep learned fixes</button>
   </div>
 </header>
 
@@ -1286,10 +1286,17 @@ $("startBtn").onclick = startAgent;
 $("killBtn").onclick = () => post("/agent/kill", {}, "Agent killed with kill -9. No cleanup, no goodbye.");
 $("pauseBtn").onclick = () => post("/pause", { recall_id: rid, paused: !S?.control.paused },
   S?.control.paused ? "Resumed." : "Paused. Tracer stops before its next step.");
-$("resetBtn").onclick = async () => { if (await post("/reset", { wipe_memory: false }, "Reset. Learned fixes are kept.")) load(); };
-$("wipeBtn").onclick = async () => {
-  if (!confirm("Reset everything and forget every learned fix?")) return;
-  if (await post("/reset", { wipe_memory: true }, "Reset. Memory wiped.")) load();
+// "Reset everything" is the whole starting state in one press: the recalls in Atlas, the mock
+// systems, the fixes Tracer learned, and the supplier portal's chat (kept in this browser, same
+// origin, so this page can clear it). "Keep learned fixes" exists only for the memory test.
+const CHAT_KEY = "northfield-tracer-chat-v1";   // the supplier portal's STORE_KEY
+const clearChat = () => { try { localStorage.removeItem(CHAT_KEY); } catch (e) {} };
+$("resetBtn").onclick = async () => {
+  if (!confirm("Reset everything? This clears every recall, puts the warehouse, orders and carrier back to the start, forgets the fixes Tracer learned, and clears the supplier portal's chat.")) return;
+  if (await post("/reset", { wipe_memory: true }, "Everything is back to the start.")) { clearChat(); load(); }
+};
+$("keepBtn").onclick = async () => {
+  if (await post("/reset", { wipe_memory: false }, "Reset. Learned fixes are kept for the memory test.")) { clearChat(); load(); }
 };
 $("techToggle").onchange = (e) => document.body.classList.toggle("show-tech", e.target.checked);
 $("traceBack").onclick = closeTrace;

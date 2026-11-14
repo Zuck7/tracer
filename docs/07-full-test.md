@@ -16,7 +16,7 @@ Open the "live log" URL the script prints (`http://localhost:8000` by default; s
 
 ## Run 1: recall `RC-GB-2611` with all four disruptions
 
-1. Press **Reset and forget learned fixes**, so memory starts empty.
+1. Press **Reset everything**, so the recalls, the mock systems, the supplier chat and memory all start empty.
 2. Before starting, press **Warehouse glitch** (chapter 2) and **Carrier changes its API** (chapter 4). Both can be armed in advance.
 3. Press **Start agent**.
 4. During chapter 3 (cancels), press **Truck arrives early**.
@@ -39,7 +39,7 @@ python -m scripts.check_exactly_once RC-GB-2611   # expect ✅
 
 ## Run 2: recall `RC-OB-3107`, the memory proof
 
-1. Press **Reset**. Do not use "Reset and forget learned fixes" here: the saved fix must survive.
+1. Press **Reset, keep learned fixes**. Do not use "Reset everything" here: the saved fix must survive.
 2. Switch the recall selector to `RC-OB-3107`.
 3. Press **Carrier changes its API** again, because Reset cleared it.
 4. Press **Start agent**.
