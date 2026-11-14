@@ -37,4 +37,5 @@ cp .env.example .env   # then fill in MONGODB_URI and LLM_API_KEY
 - [x] Agent loop tests against in-process fake systems (`tests/`): happy path, silent failure, crash after call, crash before call, lease, pause
 - [x] Mock warehouse, orders and carrier + notify services with chaos toggles (`mocks/`): idempotency keys, drop-writes, carrier API v1 → v2; notifications deliberately don't de-duplicate
 - [x] Crash resume and read-back verification, proven on Atlas: dropped writes caught and retried; `kill -9` mid-recall → restart → exactly one notice per customer (`scripts/check_exactly_once.py`)
+- [x] Setup check (`scripts/check_setup.py`): `.env` present and git-ignored, Atlas reachable, transactions supported, write access to `tracer`, API keys set; never prints a secret
 - [ ] API-change repair with vector memory
