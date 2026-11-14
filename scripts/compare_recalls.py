@@ -14,8 +14,10 @@ from store.db import db
 ROWS = [
     ("steps verified", lambda r: f"{_count_steps(r, 'verified')}/{_count_steps(r)}"),
     ("failed attempts", lambda r: _events(r, "failed")),
-    ("LLM repair calls", lambda r: _events(r, "repair_proposed")),
-    ("fixes found in memory", lambda r: _events(r, "memory_hit")),
+    # The agent logs repair_proposed for both sources; detail.source says which one.
+    ("LLM repair calls", lambda r: _events(r, "repair_proposed", **{"detail.source": "llm"})),
+    ("fixes found in memory", lambda r: _events(r, "memory_hit")
+        or _events(r, "repair_proposed", **{"detail.source": "memory"})),
     ("repairs verified + saved", lambda r: _events(r, "repair_verified")),
     ("repairs rejected", lambda r: _events(r, "repair_rejected")),
     ("reconciled after crash", lambda r: _events(r, "reconciled")),
@@ -31,8 +33,8 @@ def _count_steps(rid: str, status: str | None = None) -> int:
     return db.steps.count_documents(q)
 
 
-def _events(rid: str, event: str) -> int:
-    return db.audit_log.count_documents({"recall_id": rid, "event": event})
+def _events(rid: str, event: str, **extra) -> int:
+    return db.audit_log.count_documents({"recall_id": rid, "event": event, **extra})
 
 
 def _attempts(rid: str, action: str) -> str:
