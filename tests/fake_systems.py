@@ -31,7 +31,7 @@ class FakeSystems:
         for i in range(1, 23):
             status = "open" if i <= 10 else "shipped" if i <= 18 else "delivered"
             tracking = f"TRK-{5000 + i - 10}" if 11 <= i <= 18 else (
-                f"TRK-{4990 + i - 19}" if i > 18 else None)
+                f"TRK-{4990 + i - 19}" if i > 18 else f"TRK-{7000 + i}")  # open: label printed
             self.orders[f"ORD-{1000 + i}"] = {
                 "order_id": f"ORD-{1000 + i}", "customer_id": f"CUST-{100 + i}", "lot": "GB-2611",
                 "status": status, "tracking_no": tracking, "cancel": None}
@@ -39,9 +39,15 @@ class FakeSystems:
                                               "order_id": f"ORD-{1010 + i}", "lot": "GB-2611",
                                               "status": "in_transit", "intercept": None}
                           for i in range(1, 9)}
+        for i in range(1, 11):  # labels printed for open orders, waiting for the truck
+            self.shipments[f"TRK-{7000 + i}"] = {"tracking_no": f"TRK-{7000 + i}",
+                                                 "order_id": f"ORD-{1000 + i}", "lot": "GB-2611",
+                                                 "status": "label_created", "intercept": None}
+        self.ship_on_first_cancel = False  # chaos: the truck collects the last open order early
         self.notifications: list[dict] = []
         self.keys: dict[str, dict] = {}  # idempotency key → first response
         self.drop_next_writes = {"warehouse": 0, "orders": 0, "carrier": 0}
+        self.carrier_version = "v1"  # "v2": tracking_no → shipment_ref, /intercepts removed
         self.calls: list[tuple[str, str]] = []
         self._ids = count(1)
 
@@ -82,11 +88,14 @@ class FakeSystems:
             return httpx.Response(200, json=[_public(o, "cancel") for o in items])
         if host == "orders":
             return _found(self.orders.get(parts[1]))
+        if host == "carrier" and parts == ["api-spec"]:
+            return httpx.Response(200, json=API_SPEC[self.carrier_version])
         if host == "carrier" and parts == ["shipments"]:
             items = [s for s in self.shipments.values() if s["lot"] == q.get("lot")]
-            return httpx.Response(200, json=[_public(s, "intercept") for s in items])
+            return httpx.Response(200, json=[self._ship(_public(s, "intercept")) for s in items])
         if host == "carrier" and parts[0] == "shipments":
-            return _found(self.shipments.get(parts[1]))
+            found = self.shipments.get(parts[1])
+            return _found(self._ship(found) if found else None)
         if host == "carrier" and parts == ["notifications"]:
             field, value = next(iter(q.items()))
             return httpx.Response(200, json=[n for n in self.notifications if n.get(field) == value])
@@ -102,6 +111,9 @@ class FakeSystems:
                                              "idempotency_key": key})
             response = {"unit_id": unit["unit_id"], "status": "hold", "hold_id": hold_id}
         elif host == "orders" and parts[-1] == "cancel":
+            if self.ship_on_first_cancel:
+                self.ship_on_first_cancel = False
+                self.pickup_last_open()
             order = self.orders.get(parts[1])
             if not order:
                 return httpx.Response(404, json={"detail": "order not found"})
@@ -110,7 +122,15 @@ class FakeSystems:
             order.update(status="cancelled", cancel={"recall_id": body["recall_id"],
                                                      "idempotency_key": key})
             response = {"order_id": order["order_id"], "status": "cancelled"}
-        elif host == "carrier" and parts == ["intercepts"]:
+        elif host == "carrier" and parts[:1] == ["shipments"] and parts[-1:] == ["return"] \
+                and self.carrier_version == "v2":
+            shipment = self.shipments.get(parts[1])
+            if not shipment:
+                return httpx.Response(404, json={"detail": "shipment not found"})
+            shipment.update(status="intercept_requested",
+                            intercept={"recall_id": body["recall_id"], "idempotency_key": key})
+            response = {"return_id": f"RET-{next(self._ids):04x}", "status": "intercept_requested"}
+        elif host == "carrier" and parts == ["intercepts"] and self.carrier_version == "v1":
             shipment = self.shipments.get(body.get("tracking_no"))
             if not shipment:
                 return httpx.Response(404, json={"detail": "shipment not found"})
@@ -128,6 +148,21 @@ class FakeSystems:
         self.notifications.append(notice)
         return httpx.Response(200, json={"notification_id": notice["notification_id"]})
 
+    def _ship(self, shipment: dict) -> dict:
+        """v2 renames tracking_no to shipment_ref in every shipment it returns."""
+        if self.carrier_version == "v1":
+            return dict(shipment)
+        out = dict(shipment)
+        out["shipment_ref"] = out.pop("tracking_no")
+        return out
+
+    def pickup_last_open(self) -> str:
+        """Same as POST /pickup on the orders + carrier mocks."""
+        last = max(o for o, v in self.orders.items() if v["status"] == "open")
+        self.orders[last]["status"] = "shipped"
+        self.shipments[self.orders[last]["tracking_no"]]["status"] = "in_transit"
+        return last
+
     # -- checks used by tests ------------------------------------------------
     def notices_per_customer(self, recall_id: str) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -135,6 +170,20 @@ class FakeSystems:
             if n["recall_id"] == recall_id:
                 counts[n["customer_id"]] = counts.get(n["customer_id"], 0) + 1
         return counts
+
+
+API_SPEC = {
+    "v1": {"service": "carrier", "version": "v1", "endpoints": [
+        {"method": "POST", "path": "/intercepts",
+         "body": {"tracking_no": "string", "recall_id": "string", "reason": "string"}},
+        {"method": "GET", "path": "/shipments/{tracking_no}", "fields": ["tracking_no", "status"]}]},
+    "v2": {"service": "carrier", "version": "v2", "endpoints": [
+        {"method": "POST", "path": "/shipments/{shipment_ref}/return",
+         "body": {"recall_id": "string", "reason": "string"},
+         "returns": {"return_id": "string", "status": "intercept_requested"}},
+        {"method": "GET", "path": "/shipments/{shipment_ref}",
+         "fields": ["shipment_ref", "status", "intercept"]}]},
+}
 
 
 def _public(record: dict, hidden: str) -> dict:

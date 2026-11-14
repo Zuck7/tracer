@@ -40,6 +40,8 @@ class StoreAPI(Protocol):
     def claim_lease(self, recall_id: str, worker_id: str, ttl_s: int = 15) -> bool: ...
     def renew_lease(self, recall_id: str, worker_id: str, ttl_s: int = 15) -> bool: ...
     def is_paused(self, recall_id: str) -> bool: ...
+    # Optional: demo crash on demand. True once per request (consumed atomically).
+    def take_crash_request(self, recall_id: str) -> bool: ...
     def finish(self, recall_id: str, report: dict[str, Any]) -> None: ...
 
     # steps: each transition writes the step and its audit entry together
@@ -112,6 +114,14 @@ class MemoryStore:
 
     def is_paused(self, recall_id: str) -> bool:
         return bool(self.control.get(recall_id, {}).get("paused"))
+
+    def take_crash_request(self, recall_id: str) -> bool:
+        doc = self.control.get(recall_id, {})
+        if doc.get("crash"):
+            doc["crash"] = False
+            self._save()
+            return True
+        return False
 
     def finish(self, recall_id: str, report: dict[str, Any]) -> None:
         doc = self.control[recall_id]
