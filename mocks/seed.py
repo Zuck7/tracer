@@ -36,15 +36,15 @@ def orders() -> dict[str, dict]:
                          "status": status, "tracking_no": tracking_no, "cancel": None}
 
     # Recall 1
-    for n in range(10):                                   # open
-        add(f"ORD-{1001 + n}", f"CUST-{101 + n}", "GB-2611", "open")
+    for n in range(10):                                   # open (label printed, awaiting pickup)
+        add(f"ORD-{1001 + n}", f"CUST-{101 + n}", "GB-2611", "open", f"TRK-{7001 + n}")
     for n in range(8):                                    # on trucks
         add(f"ORD-{1011 + n}", f"CUST-{111 + n}", "GB-2611", "shipped", f"TRK-{5001 + n}")
     for n in range(4):                                    # already in homes
         add(f"ORD-{1019 + n}", f"CUST-{119 + n}", "GB-2611", "delivered", f"TRK-{4990 + n}")
     # Recall 2
     for n in range(4):
-        add(f"ORD-{2001 + n}", f"CUST-{201 + n}", "OB-3107", "open")
+        add(f"ORD-{2001 + n}", f"CUST-{201 + n}", "OB-3107", "open", f"TRK-{7101 + n}")
     for n in range(4):
         add(f"ORD-{2005 + n}", f"CUST-{205 + n}", "OB-3107", "shipped", f"TRK-{6001 + n}")
     return out
@@ -64,4 +64,10 @@ def shipments() -> dict[str, dict]:
         add(f"TRK-{4990 + n}", f"ORD-{1019 + n}", "GB-2611", "delivered")
     for n in range(4):
         add(f"TRK-{6001 + n}", f"ORD-{2005 + n}", "OB-3107", "in_transit")
+    # Labels printed for open orders: the truck collects them at the pickup time.
+    # Not on a truck yet, so the agent cancels the order instead of intercepting.
+    for n in range(10):
+        add(f"TRK-{7001 + n}", f"ORD-{1001 + n}", "GB-2611", "label_created")
+    for n in range(4):
+        add(f"TRK-{7101 + n}", f"ORD-{2001 + n}", "OB-3107", "label_created")
     return out

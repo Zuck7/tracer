@@ -156,3 +156,17 @@ def list_notifications(idempotency_key: str | None = None, recall_id: str | None
     if customer_id:
         out = [n for n in out if n["customer_id"] == customer_id]
     return out
+
+
+class PickupIn(BaseModel):
+    tracking_no: str
+
+
+@app.post("/pickup")
+def pickup(body: PickupIn):
+    """Chaos: the label-printed shipment is collected and is now on a truck."""
+    with state.lock:
+        shipment = _shipment(body.tracking_no)
+        shipment["status"] = "in_transit"
+    print(f"[carrier] CHAOS: {body.tracking_no} picked up early, now in transit")
+    return _out(shipment)

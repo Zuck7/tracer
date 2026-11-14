@@ -44,3 +44,23 @@ def cancel_order(order_id: str, body: CancelIn, idempotency_key: str | None = He
 
     return state.write(idempotency_key, apply,
                        fake=lambda: {"order_id": order_id, "status": "cancelled"})
+
+
+class PickupIn(BaseModel):
+    lot: str
+
+
+@app.post("/pickup")
+def pickup(body: PickupIn):
+    """Chaos: the truck arrives early and collects the LAST open order of the lot
+    (the one the agent reaches last), so its cancel will get 409 "already shipped"."""
+    with state.lock:
+        open_orders = sorted((o for o in state.data["orders"].values()
+                              if o["lot"] == body.lot and o["status"] == "open"),
+                             key=lambda o: o["order_id"])
+        if not open_orders:
+            raise HTTPException(409, "no open orders left to pick up")
+        order = open_orders[-1]
+        order["status"] = "shipped"
+    print(f"[orders] CHAOS: truck picked up {order['order_id']} early ({order['tracking_no']})")
+    return {"order_id": order["order_id"], "tracking_no": order["tracking_no"], "status": "shipped"}
