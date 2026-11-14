@@ -29,6 +29,11 @@ In judging, a judge can press the buttons live instead of pre-arming. Pre-arming
 
 Record it with a screen recorder at 1080p. Cut dead time. Captions help if the room is noisy.
 
+**What the resource guide requires of the video** (checked 1:30 PM):
+- It must show **the code and the functionality built today**, not only the UI. Put 2 to 3 seconds of code on screen at each beat: the `$jsonSchema` validator in `store/setup_db.py`, `transition()` in `store/steps.py` (step + audit in one transaction), `reconcile()` in `agent/reconcile.py`, `find_fix()` in `store/memory.py`.
+- It must have **working audio**. Record a voice-over and play the file back before uploading.
+- The live log footer says "Built today"; keep it in frame.
+
 ## 3-minute finals demo
 
 | Time | Beat | What happens |
@@ -59,7 +64,8 @@ Record it with a screen recorder at 1080p. Cut dead time. Captions help if the r
 - [ ] `git log` and `git grep -i "mongodb+srv"` show no secrets. `.env` is not tracked
 - [ ] Repo is **public**
 - [ ] Root README: what it is, how to run it, **"Built today" list ticked and accurate**
-- [ ] Video ≤ 60 seconds, uploaded, link works in a private window
+- [ ] Video ≤ 60 seconds, shows code and functionality, **audio plays**, link works in a private window
+- [ ] **Concise project description** pasted into the Cerebral Valley form (what we built today; use the first two paragraphs of the root README)
 - [ ] All three team members added on the Cerebral Valley submission page
 - [ ] Built in the provided Atlas Sandbox (required for finalists)
 

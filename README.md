@@ -32,7 +32,7 @@ cp .env.example .env   # then fill in MONGODB_URI and LLM_API_KEY
 - [x] MongoDB collections with validators and indexes (`steps`, `audit_log`, `experiences`, `control`): `$jsonSchema` refuses a `verified` step without `proof`, unique idempotency keys, TTL on learned fixes
 - [x] Atlas store (`store/`): step + audit entry written in one transaction, lease with `findOneAndUpdate`, pause flag, report
 - [x] Vector memory (`store/memory.py`): Atlas Vector Search with Automated Embedding (Voyage `voyage-4`), score threshold measured in the sandbox
-- [x] Live log (`web/`): MongoDB change stream → browser, truck countdown, chaos / kill / pause / reset buttons
+- [x] Live log server (`web/app.py`): MongoDB change stream → browser over server-sent events, agent start / kill, chaos proxy, pause flag, reset; phone page for judges at `/judge`
 - [x] Agent orchestrator with policy gate (`agent/`): CallSpecs, write-ahead `sent` before every call, read-back verification with proof, same-key retries, crash reconcile, lease and pause checks
 - [x] Agent loop tests against in-process fake systems (`tests/`): happy path, silent failure, crash after call, crash before call, lease, pause
 - [x] Mock warehouse, orders and carrier + notify services with chaos toggles (`mocks/`): idempotency keys, drop-writes, carrier API v1 → v2; notifications deliberately don't de-duplicate

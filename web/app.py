@@ -78,6 +78,12 @@ def index():
     return FileResponse(Path(__file__).parent / "index.html")
 
 
+@app.get("/judge")
+def judge():
+    """Phone page for judges: the chaos buttons and a counter, nothing else."""
+    return FileResponse(Path(__file__).parent / "judge.html")
+
+
 @app.get("/history")
 def history(recall_id: str, limit: int = 300):
     rows = list(db.audit_log.find({"recall_id": recall_id}).sort("at", -1).limit(limit))

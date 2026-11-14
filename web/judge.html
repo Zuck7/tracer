@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracer judge controls</title>
+<style>
+  :root { --bg: #0b0f14; --panel: #121821; --line: #263140; --text: #e8eef5; --muted: #8a97a8;
+          --ok: #22c55e; --fail: #ef4444; --warn: #f59e0b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+         font: 16px/1.4 system-ui, -apple-system, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+  .stat { display: flex; justify-content: space-between; padding: 12px 14px; background: var(--panel);
+          border: 1px solid var(--line); border-radius: 10px; margin-bottom: 16px; font-weight: 600; }
+  .stat span:last-child { font-family: ui-monospace, Menlo, monospace; }
+  button { display: block; width: 100%; padding: 18px; margin-bottom: 12px; border-radius: 12px; font: 600 17px system-ui;
+           background: var(--panel); color: var(--text); border: 2px solid var(--line); text-align: left; }
+  button small { display: block; font-weight: 400; font-size: 13px; color: var(--muted); margin-top: 4px; }
+  button:active { transform: scale(.98); }
+  .chaos { border-color: var(--warn); }
+  .danger { border-color: var(--fail); }
+  .go { border-color: var(--ok); }
+  #msg { color: var(--muted); font-size: 13px; min-height: 20px; }
+</style>
+</head>
+<body>
+  <h1>Break Tracer</h1>
+  <p>Press any button while the recall runs. Watch the big screen: the agent should catch it and finish the job anyway.</p>
+  <div class="stat"><span id="rid">RC-GB-2611</span><span id="count">-</span></div>
+
+  <button class="chaos" onclick="chaos('warehouse', {drop_next_writes: 2})">Drop warehouse writes
+    <small>The warehouse says 200 but doesn't hold the unit</small></button>
+  <button class="chaos" onclick="chaos('carrier', {api_version: 'v2'})">Change the carrier API
+    <small>Renames a field and moves the intercept endpoint</small></button>
+  <button class="danger" onclick="post('/agent/kill')">Kill the agent
+    <small>kill -9, mid-step, no warning</small></button>
+  <button class="go" onclick="post('/agent/start', {recall_id: rid})">Restart the agent
+    <small>It should resume without repeating or skipping anything</small></button>
+  <button onclick="togglePause()" id="pauseBtn">Pause<small>The agent stops before its next step</small></button>
+  <div id="msg"></div>
+
+<script>
+let rid = new URLSearchParams(location.search).get("recall") || "RC-GB-2611", paused = false;
+document.getElementById("rid").textContent = rid;
+async function post(path, body = {}) {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  document.getElementById("msg").textContent = r.ok ? "Done. Watch the big screen." : (j.detail || "Error");
+  refresh();
+}
+const chaos = (service, body) => post("/chaos", { service, body });
+const togglePause = () => post("/pause", { recall_id: rid, paused: !paused });
+async function refresh() {
+  try {
+    const s = await (await fetch(`/state?recall_id=${rid}`)).json();
+    let ok = 0, total = 0;
+    for (const c of Object.values(s.counts)) for (const [k, n] of Object.entries(c)) { total += n; if (k === "verified") ok += n; }
+    document.getElementById("count").textContent = `${ok}/${total} verified · agent ${s.agent_running ? "running" : "stopped"}`;
+    paused = !!s.control.paused;
+    document.getElementById("pauseBtn").firstChild.textContent = paused ? "Resume" : "Pause";
+  } catch (e) {}
+}
+refresh(); setInterval(refresh, 1500);
+</script>
+</body>
+</html>
