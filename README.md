@@ -75,3 +75,4 @@ python -m tests.test_agent_loop                    # agent loop tests
 - [x] Supplier lot records in Atlas (`store/catalogue.py`, `supplier_lots`): products, lots, QA findings, searched with Automated Embedding vector search
 - [x] Large synthetic world (`mocks/world.py`): ~650 lots, ~5,000 cases, 15,000 orders, 6,000 customers, ~13,000 shipments, so a recall is a needle in a haystack; `/stats` on each mock
 - [x] Recall proof script (`scripts/prove_recall.py`): read-only check that every business system agrees with what Tracer wrote in Atlas; unfinished runs keep their report as `needs_attention`
+- [x] Voice in the supplier console (`web/voice.py`, `web/voice.js`): ElevenLabs voice agent that speaks through the same chat as typing, plus a narrator that reads Tracer's updates aloud
