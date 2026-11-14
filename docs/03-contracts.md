@@ -173,6 +173,22 @@ Decoy: `UNIT-0099`, lot `GB-2612`, returned by the fuzzy inventory search → de
 
 Both recalls are seeded at every `POST /reset`.
 
+### Background data (not in either recall)
+
+So the agent has to find the recalled lot among normal traffic, the mocks also hold stock and orders that no recall touches. It is generated from fixed seeds in `mocks/seed.py`, so every reset gives the same data.
+
+| System | Total | Of which in recall 1 | Variety |
+|---|---|---|---|
+| Warehouse | 272 units, 18 lots, 12 SKUs, 3 sites (`TOR-1`, `MIS-2`, `VAU-3`) | 20 units | 8 products; the recalled lot spans 2 pack sizes and 2 sites |
+| Orders | 210 orders from 123 customers | 22 orders | Statuses `open`, `shipped`, `delivered`, `cancelled`; channels web, marketplace, wholesale; 12 cities; some repeat customers also bought a recalled lot |
+| Carrier | 188 shipments | 8 in transit, 10 with labels printed, 4 delivered | `ground` and `express` |
+
+Background lots never share the first 5 characters with a recalled lot, so the fuzzy warehouse search still returns exactly one decoy.
+
+Extra fields on every record (additive; the fields above are unchanged): units have `product`, `site`, `expires`; orders have `sku`, `qty`, `channel`, `ship_to`, `placed_at`; shipments have `service`, `destination`.
+
+`GET /stats` on each mock returns the size of its whole book (for example `{"units": 272, "lots": 18, "skus": 12, "sites": 3, "on_hold": 20}`), so the live log can show "20 of 272 units".
+
 ## 8. Atlas: database `tracer`
 
 ### `steps`

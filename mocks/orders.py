@@ -20,6 +20,17 @@ def _order(order_id: str) -> dict:
     return order
 
 
+@app.get("/stats")
+def stats():
+    """Size of the whole order book, so the recalled lot can be shown against normal traffic."""
+    orders = state.data["orders"].values()
+    by_status: dict[str, int] = {}
+    for o in orders:
+        by_status[o["status"]] = by_status.get(o["status"], 0) + 1
+    return {"orders": len(orders), "customers": len({o["customer_id"] for o in orders}),
+            "lots": len({o["lot"] for o in orders}), "by_status": by_status}
+
+
 @app.get("/orders")
 def list_orders(lot: str):
     return [{k: v for k, v in o.items() if k != "cancel"}

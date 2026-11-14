@@ -20,6 +20,15 @@ def _unit(unit_id: str) -> dict:
     return unit
 
 
+@app.get("/stats")
+def stats():
+    """Size of the whole warehouse, so the recalled lot can be shown against normal stock."""
+    units = state.data["units"].values()
+    return {"units": len(units), "lots": len({u["lot"] for u in units}),
+            "skus": len({u["sku"] for u in units}), "sites": len({u["site"] for u in units}),
+            "on_hold": sum(u["status"] == "hold" for u in units)}
+
+
 @app.get("/inventory")
 def list_inventory(lot: str):
     # Deliberately fuzzy: matches on the lot prefix, so "GB-2611" also returns the GB-2612 decoy.
