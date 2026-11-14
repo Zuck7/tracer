@@ -10,6 +10,7 @@ This folder is the team's build book. If two docs disagree, **[03-contracts.md](
 | 04 | [Roadmap](04-roadmap.md) | What each person builds in each block, and the gate to pass before moving on | At the start of each block |
 | 05 | [Dev guide](05-dev-guide.md) | Folder layout, setup, how to run everything, git rules, starter prompts for Claude Code | When setting up, and when stuck |
 | 06 | [Demo and pitch](06-demo-and-pitch.md) | The 1-minute video, the 3-minute finals demo, judge Q&A, submission checklist | From 3:40 PM on |
+| 07 | [Full test](07-full-test.md) | How do we run everything a judge will see, by hand, and what should happen? | Before rehearsing, on the demo laptop |
 
 ## Reading order by role
 
