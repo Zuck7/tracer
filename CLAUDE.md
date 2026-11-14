@@ -2,7 +2,7 @@
 
 Product recall agent for the MongoDB "Agents in Context" Toronto Hackathon (Sat Nov 14, 2026), Track 3: Finish the Job. Submissions due 5:00 PM ET.
 
-**Read [TRACER_TEAM_CONTEXT.md](TRACER_TEAM_CONTEXT.md) first.** It holds the schemas, architecture, roles, timeline, demo script and judge Q&A. If `TRACER_HANDOFF.md` exists locally (it is gitignored), read it too for setup status.
+**Read [TRACER_TEAM_CONTEXT.md](TRACER_TEAM_CONTEXT.md) first** for the summary, then the build book in [docs/](docs/README.md). **[docs/03-contracts.md](docs/03-contracts.md) is the source of truth** for mock endpoints, JSON shapes, collections, validators, indexes and seed data: code against it exactly, and don't change it without telling the user. Folder layout and code rules are in [docs/05-dev-guide.md](docs/05-dev-guide.md). If `TRACER_HANDOFF.md` exists locally (it is gitignored), read it too for setup status.
 
 ## Rules that must not be broken
 

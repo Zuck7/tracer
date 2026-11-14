@@ -14,7 +14,7 @@ All data is synthetic.
 - **Reconcile, don't replay:** after a crash, `sent` steps are checked against the real system by idempotency key.
 - **Vector memory:** verified repairs are stored in Atlas and retrieved with Vector Search on the next recall.
 
-Full design, schemas and demo script: [TRACER_TEAM_CONTEXT.md](TRACER_TEAM_CONTEXT.md)
+Full design, schemas and demo script: [docs/](docs/README.md) (start with [architecture](docs/02-architecture.md) and [contracts](docs/03-contracts.md)).
 
 ## Stack
 

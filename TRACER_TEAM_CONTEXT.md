@@ -3,7 +3,7 @@
 MongoDB "Agents in Context" Toronto Hackathon, Sat Nov 14, 2026
 **Track 3: Finish the Job**, built **only on MongoDB Atlas**
 
-> Read this first. It's everything you need to start building.
+> Read this first. It's the summary. The detailed build book is in [docs/](docs/README.md), and the API shapes and schemas everyone codes against are in [docs/03-contracts.md](docs/03-contracts.md).
 
 ---
 
@@ -150,22 +150,28 @@ crash restart ──steps stuck in "sent"──▶ [read-back check]
 | **B: Atlas layer** | Collections, validators, indexes, transactions, leases, resume logic, change streams, vector memory | Kill and restart resumes with zero repeat notifications |
 | **C: Systems + demo** | 3 FastAPI mocks (warehouse, orders, carrier + notify) with chaos toggles, synthetic data, live timeline with countdown, judge's phone page, video | All 5 demo moments trigger on cue |
 
-**First 30 minutes (until ~11:15):** agree on the `steps` schema above and the mock API shapes. Then build in parallel.
+**First (by 11:40):** freeze the `steps` schema above and write down the mock API shapes. Then build in parallel, following the timeline below.
 
 ---
 
-## 7. Today's timeline
+## 7. Today's timeline (revised 11:25 AM)
 
-| Time | Goal |
+The detailed schedule, per-person checklists and gate tests are in **[docs/04-roadmap.md](docs/04-roadmap.md)**. Summary:
+
+| Time | Block |
 |---|---|
-| 10:45 – 11:15 | Agree on schemas and API shapes; repo created and public |
-| 11:15 – 1:00 | Happy path end to end (lunch at 1:00) |
-| 1:00 – 3:00 | Crash resume, read-back verification, API-change repair, memory |
-| 3:00 – 4:00 | Pause flag, polish, **run the full demo 5 times**, record a backup video |
-| 4:00 – 4:40 | Record the 1-minute video, write the README ("built today" list) |
-| 4:40 – 5:00 | Buffer, then submit with all three of us added |
+| 11:40 – 12:00 | Contract freeze ([docs/03-contracts.md](docs/03-contracts.md)) + setup |
+| 12:00 – 1:00 | Happy path (12:30 integration check) |
+| 1:00 – 1:20 | Lunch + stand-up |
+| 1:20 – 2:15 | Silent failure + crash resume |
+| 2:15 – 3:15 | API change repair + memory |
+| 3:15 – 3:40 | Report, then stretch |
+| **3:40** | **Feature freeze** |
+| 3:40 – 4:40 | Rehearse 5×, backup recording, 1-minute video, README |
+| 4:40 – 4:50 | **Submit** |
+| 5:15 – 6:45 | Round 1 judging · 7:00 – 8:00 finals |
 
-**If behind, cut in this order:** judge's phone page → pause flag → TTL expiry.
+**If a gate slips by more than 15 minutes, cut scope instead of moving the freeze.** Cut in this order: judge's phone page → pause flag → TTL expiry.
 **Never cut:** crash resume and read-back verification. They are the project.
 
 ---
@@ -176,9 +182,9 @@ crash restart ──steps stuck in "sent"──▶ [read-back check]
 |---|---|---|
 | 0:00 | Problem | "Lot GB-2611 has undeclared peanuts." Tracer starts; countdown to next truck pickup |
 | 0:25 | Silent failure | Judge presses **drop writes**: warehouse says 200 but no hold. Agent catches it on read-back, retries |
-| 1:00 | Crash | Judge presses **kill agent** at step ~37. Restart: reconciles one half-done step, continues. Every customer has exactly one notice |
-| 1:40 | API change | Judge presses **change API**: carrier renames `tracking_no` to `shipment_ref`. Agent repairs, tests, saves the fix |
-| 2:15 | Memory | Second recall with the same change: fixed first try. Retry counts side by side from Atlas |
+| 0:55 | API change | Judge presses **change API**: carrier renames `tracking_no` to `shipment_ref`. Agent repairs, tests, saves the fix |
+| 1:30 | Crash | Judge presses **kill agent** during notifications (step ~45). Restart: reconciles one half-done step, continues. Every customer has exactly one notice |
+| 2:10 | Memory | Second recall with the same change: fixed first try. Retry counts side by side from Atlas |
 | 2:40 | Proof | Query Atlas for the recall effectiveness report, each step with its proof |
 
 **One sentence to say during the crash:** "Most agents would redo this step or skip it. Both are wrong. Watch it check the real system instead."
