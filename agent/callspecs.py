@@ -8,7 +8,7 @@ it on one step, and we can store it in `experiences` once it is proven.
 Placeholders in {braces} are filled from the step: target_id, recall_id, lot,
 reason, message, idempotency_key.
 
-Two optional fields go beyond the shape in docs/03-contracts.md §6:
+Two optional fields go beyond the shape in docs/contracts.md §6:
   readback_match    {"dotted.path": "{placeholder}"} extra fields that must
                     match, e.g. the hold must belong to *this* recall
   readback_id_field dotted path of the id stored in proof.read_back_id

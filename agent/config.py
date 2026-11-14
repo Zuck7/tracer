@@ -1,6 +1,6 @@
 """Agent settings and the recall catalogue.
 
-Settings come from environment variables (docs/03-contracts.md §9), so the demo
+Settings come from environment variables (docs/contracts.md §9), so the demo
 can slow the loop down (STEP_DELAY_MS) or force a crash (CRASH_AT_SEQ) without
 touching code.
 """
@@ -37,7 +37,7 @@ class Recall:
         )
 
 
-# Synthetic recalls, matching the seed data in docs/03-contracts.md §7.
+# Synthetic recalls, matching the seed data in docs/contracts.md §7.
 RECALLS: dict[str, Recall] = {
     "RC-GB-2611": Recall("RC-GB-2611", "GB-2611", "granola bars", "Undeclared peanuts"),
     "RC-OB-3107": Recall("RC-OB-3107", "OB-3107", "oat bars", "Undeclared tree nuts"),

@@ -1,6 +1,6 @@
-# 03 · Contracts
+# Contracts
 
-**This is the source of truth.** Agent, store and mocks all code against these shapes. Change something here only after telling the other two people.
+The exact shapes every part of Tracer codes against: the three mock systems' endpoints, idempotency rules, chaos switches, the CallSpec the repair step produces, and every Atlas collection, validator and index.
 
 ## 1. Conventions (all services)
 

@@ -1,41 +1,92 @@
-# Tracer: Product Recall Agent
+# Tracer
 
-Built at the MongoDB "Agents in Context" Toronto Hackathon (Nov 14, 2026), Track 3: Finish the Job. All code written during the event.
+**An AI agent that runs a product recall end to end and proves every step worked.**
 
-Tracer is an AI agent that runs a product recall end to end and proves every step worked. Given a contaminated lot, it puts the inventory on hold, cancels open orders, intercepts shipments in transit, notifies each affected customer exactly once, and writes a recall effectiveness report. It survives crashes, silent failures and API changes without missing or repeating a step, and it remembers fixes using MongoDB Atlas Vector Search.
+A lot of granola bars turns out to contain undeclared peanuts. The bad lot is sitting on warehouse shelves, in open orders, on trucks and in customers' homes, spread across systems that don't talk to each other. Tracer finds every unit of that lot among thousands of others, then:
 
-All data is synthetic.
+1. puts every unit **on hold** in the warehouse
+2. **cancels** open orders before they ship
+3. **intercepts** shipments already on the road
+4. **notifies** each affected customer **exactly once**
+5. writes a **recall report** where every line is backed by proof
 
-## How it works
+The hard part isn't the happy path. It's what happens when things go wrong mid-recall: a system says "200 OK" but did nothing, the agent process is killed halfway through, or a carrier changes its API. In a recall, each of those means unsafe food still ships, or a customer is never told, or is told three times. Tracer is built so none of that can happen, and MongoDB Atlas is what makes that possible.
 
-- **Step lifecycle:** `planned → sent → verified / failed`. Only `verified` counts as done.
-- **Write-ahead intent:** each step is saved as `sent` before the API call.
-- **Read-back verification:** a 200 response is not proof, so the agent fetches the record and confirms the change.
-- **Reconcile, don't replay:** after a crash, `sent` steps are checked against the real system by idempotency key.
-- **Vector memory:** verified repairs are stored in Atlas and retrieved with Vector Search on the next recall.
+Built in one day at the MongoDB "Agents in Context" hackathon, Toronto, Nov 14 2026. All data is synthetic.
 
-Full design, schemas and demo script: [docs/](docs/README.md) (start with [architecture](docs/02-architecture.md) and [contracts](docs/03-contracts.md)).
+## How it stays correct
 
-## Stack
+| Failure | What Tracer does |
+|---|---|
+| **A write is silently dropped.** The warehouse returns 200 but the unit isn't on hold | A 200 is not proof. After every write Tracer reads the record back and only marks the step `verified` when it sees the change. The proof is stored on the step, and the database itself rejects a `verified` step without one |
+| **The agent is killed mid-run** | Every step is saved as `sent` *before* the call goes out. On restart Tracer doesn't replay or skip: it checks each `sent` step against the real system by its idempotency key, and only resends if the effect isn't there. The notify system deliberately doesn't de-duplicate, so this logic is the only thing keeping it to one notice per customer |
+| **An API changes.** The carrier renames a field and moves an endpoint | Tracer gets a 404, gives Claude the failing call, the error and the carrier's current API description, and gets back a new call spec. It tests the fix on one shipment, reads it back, and only then uses it for the rest |
+| **The same problem happens again** | A fix that passed read-back is saved to Atlas Vector Search. The next recall finds it by similarity and repairs itself with **no LLM call** |
+| **The world changes under it.** A truck collects an order before its cancel lands | The cancel fails with "already shipped", so Tracer adds a step to intercept that shipment instead |
+| **Two workers, or a human who needs to step in** | A lease in Atlas means only one worker runs a recall. A pause flag stops the agent within one step, and it resumes from the same step |
 
-Python, FastAPI and MongoDB Atlas: state, audit log, transactions, `$jsonSchema` validation, leases, change streams, TTL, and Vector Search with Automated Embedding (Voyage AI). Every byte of agent state lives in the `tracer` database; there is no other store.
+Every step moves through `planned → sent → verified / failed`, and only `verified` counts as done. Each status change and its audit entry are written in one transaction, so the audit trail can never disagree with the state.
 
-Outside services: Claude (Anthropic API) repairs changed API calls and reads the supplier's plain-language report, and ElevenLabs gives the supplier console an optional voice. Neither one decides which units, orders or customers are in scope: that is plain code behind a policy gate, because a recall is safety-critical.
+The AI is used where judgment helps and kept away where it would be dangerous. Claude repairs broken API calls and reads the supplier's plain-language description of the problem. Deciding *which* units, orders and customers are in scope is plain code behind a policy gate, because a recall is safety-critical.
 
-## How it answers Track 3: Finish the Job
+## Measured on a full run
 
-| The track asks | Tracer's answer | Where |
+Searched 4,842 cases, 15,030 orders and 13,250 shipments (5,547 customers) for the recalled lots, with every disruption triggered during recall 1.
+
+| | Recall 1 `RC-GB-2611` | Recall 2 `RC-OB-3107` |
 |---|---|---|
-| A long multi-step task across several systems | One recall is 60 steps across three separate services: a warehouse, an order system and a carrier with customer notifications. The recalled lot is found among ~4,800 cases, ~15,000 orders and ~13,000 shipments of other lots, and nothing outside it is touched | `agent/plan.py`, `mocks/` |
-| MongoDB Atlas persists verified task state | Every step lives in `steps`; the database refuses a `verified` step without `proof`; each status change and its audit entry commit in one transaction | `store/setup_db.py`, `store/steps.py` |
-| How does it tell an action that took effect from one that was only sent? | It reads the record back after every write. A 200 with no change is caught and retried with the same idempotency key | `agent/clients.py`, `agent/run.py` |
-| How does it resume after a crash without replaying its history? | The step is saved as `sent` before the call. On restart only the `sent` steps are checked against the real system; verified ones are skipped and nothing is resent | `agent/reconcile.py` |
-| How does it adapt when fields or workflow change? | The carrier renames a field and moves an endpoint: Claude proposes a new call, it is tested on one shipment, then used. A truck collects an order before its cancel lands: the agent intercepts the shipment instead | `agent/repair.py`, `agent/run.py` |
-| Vector Search retrieves relevant past experience | Proven fixes are stored in `experiences` with Atlas Automated Embedding. The next recall finds the fix by similarity and makes no LLM call. The supplier's lot records are searched the same way to find the lot from a plain-language report | `store/memory.py`, `store/catalogue.py` |
+| Steps verified | 61 / 61 (60 planned + 1 escalation) | 24 / 24 |
+| Dropped warehouse write | caught on read-back, verified on attempt 2 | |
+| Truck left early | cancel refused, shipment intercepted instead | |
+| Carrier API change | 404 → Claude's fix tested on one shipment, saved to memory | 404 → fix found in memory (score 0.93), **0 LLM calls** |
+| Agent killed mid-notification | restart reconciled the step, notice not resent | |
+| Every system's records match Atlas | ✅ | ✅ |
+| Exactly one notice per customer | ✅ 22 / 22 | ✅ 8 / 8 |
 
-It also covers parts of the other two tracks: a supplier must approve the plan before anything changes, a policy gate checks every action before it runs, and every action is audited with its actor (Track 1); remembered fixes expire by TTL (Track 2).
+These checks are scripts you can run yourself (below). They read the business systems directly, not Tracer's own records.
+
+## What runs
+
+```
+                 write, then read back
+ ┌──────────────┐ ───────────────────▶ ┌──────────────────────────┐
+ │ Tracer agent │                      │ Warehouse                │
+ │  scope, plan │ ───────────────────▶ │ Orders                   │
+ │  policy gate │                      │ Carrier + notifications  │
+ │  verify      │ ───────────────────▶ │  (mock services with     │
+ │  repair      │                      │   failure switches)      │
+ └──────┬───────┘                      └──────────────────────────┘
+        │ state, audit, memory ▲ fixes, pause, lease
+        ▼                      │
+ ┌──────────────────────────────────────────────────────────────┐
+ │ MongoDB Atlas, database `tracer`                             │
+ │ steps · audit_log · experiences · control · supplier_lots    │
+ └──────────────────────────────────────────────────────────────┘
+```
+
+- **Supplier console** (`/console`): the supplier describes the problem in plain language (typed or spoken), Tracer finds the lot in their records with vector search and proposes a plan, and nothing changes until the supplier approves it. Items that need a person are resolved here, and the report is read here.
+- **Live log** (`/`): the recall as it happens, chapter by chapter, with buttons that break things on purpose: drop a warehouse write, send a truck early, change the carrier's API, crash the agent. Click any step to trace it from plan to proof: every write to Atlas in order, the exact call, the read-back, and each repair or restart.
+
+The three business systems are mocks so failures can be triggered on cue. They keep their own state in their own processes, separate from Atlas, so reading them back proves something real.
+
+## MongoDB Atlas does all of it
+
+| Need | Atlas feature | Where |
+|---|---|---|
+| Durable step state and checkpoint | `steps` collection, unique index on the idempotency key | `store/setup_db.py`, `store/steps.py` |
+| "Verified" can't be faked | `$jsonSchema` validator requires `proof` when `status = verified` | `store/setup_db.py` |
+| State and audit never disagree | Multi-document transaction per step transition | `store/steps.py` |
+| Only one worker per recall | Lease claimed with `findOneAndUpdate` | `store/agent_store.py` |
+| Live view of the agent | Change stream on `audit_log` (every transition writes one, in commit order), streamed to the browser | `web/app.py` |
+| Memory of proven fixes | Atlas Vector Search with Automated Embedding (Voyage AI) | `store/memory.py` |
+| Old fixes expire | TTL index on `experiences` | `store/setup_db.py` |
+| Find the lot from a plain-language report | Vector search over the supplier's lot records | `store/catalogue.py` |
+
+There is no other database, queue or cache. Outside Atlas, the only services are Claude (Anthropic API) for repair and intake, and optionally ElevenLabs for voice in the supplier console.
 
 ## Run it
+
+Needs Python 3.10+, a MongoDB Atlas cluster and an Anthropic API key.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -43,39 +94,45 @@ pip install -r requirements.txt
 cp .env.example .env            # fill in MONGODB_URI and LLM_API_KEY (ElevenLabs keys are optional)
 python -m scripts.check_setup   # checks .env, Atlas and keys without printing them
 python -m store.setup_db        # collections, validators, indexes (safe to re-run)
-scripts/run_demo.sh             # three mock systems + the live log
+scripts/run_demo.sh             # three mock systems + the web app
 ```
 
-Open the URL it prints. `/console` is the supplier's side: say what happened, approve the plan, read the report. `/` is the live log, with the disruption buttons; click any step there to trace it from plan to proof. A full walk-through with expected results is in [docs/07-full-test.md](docs/07-full-test.md).
+Open the URL it prints. Start with `/console` to declare a recall, or go straight to `/` and press **Start agent**. A step-by-step walkthrough with every disruption and what you should see is in [docs/walkthrough.md](docs/walkthrough.md).
+
+Check a finished recall:
 
 ```bash
-python -m scripts.prove_recall RC-GB-2611          # every system's own records vs what Tracer wrote in Atlas
-python -m scripts.check_exactly_once RC-GB-2611    # one notice per customer, checked in the notify system
-python -m scripts.compare_recalls                  # recall 1 vs recall 2: LLM calls and memory hits, from Atlas
-python -m pytest -q                                # 33 tests: agent loop (crash, silent failure, repair, memory), intake, voice; needs .env
+python -m scripts.prove_recall RC-GB-2611          # each business system's own records vs the proof in Atlas
+python -m scripts.check_exactly_once RC-GB-2611    # one notice per customer, counted in the notify system
+python -m scripts.compare_recalls                  # recall 1 vs recall 2: LLM calls and memory hits
+python -m pytest -q                                # 33 tests: agent loop (crash, silent failure, repair, memory), intake, voice
 ```
+
+## Code map
+
+| Folder | What's in it |
+|---|---|
+| `agent/` | The recall loop (`run.py`), scoping with a reason per item (`plan.py`), policy gate (`policy.py`), crash reconcile (`reconcile.py`), API repair (`repair.py`), plain-language intake (`intake.py`) |
+| `store/` | Every Atlas read and write: steps and audit in one transaction, lease, pause, vector memory, supplier lot records |
+| `mocks/` | Warehouse, orders and carrier + notify services with failure switches, and a synthetic world of ~650 lots and 15,000 orders |
+| `web/` | Live log, supplier console, step trace, voice |
+| `scripts/` | Setup check, reset, and the proof scripts above |
+| `tests/` | Agent loop tests against in-process fake systems |
+
+More detail: [architecture](docs/architecture.md) · [API and schema contracts](docs/contracts.md) · [walkthrough](docs/walkthrough.md) · [design questions](docs/faq.md)
 
 ## Built today
 
-- [x] MongoDB collections with validators and indexes (`steps`, `audit_log`, `experiences`, `control`): `$jsonSchema` refuses a `verified` step without `proof`, unique idempotency keys, TTL on learned fixes
-- [x] Atlas store (`store/`): step + audit entry written in one transaction, lease with `findOneAndUpdate`, pause flag, report
-- [x] Vector memory (`store/memory.py`): Atlas Vector Search with Automated Embedding (Voyage `voyage-4`), score threshold measured in the sandbox
-- [x] Live log server (`web/app.py`): MongoDB change stream → browser over server-sent events, agent start / kill, chaos proxy, pause flag, reset; phone page for judges at `/judge`
-- [x] Agent orchestrator with policy gate (`agent/`): CallSpecs, write-ahead `sent` before every call, read-back verification with proof, same-key retries, crash reconcile, lease and pause checks
-- [x] Agent loop tests against in-process fake systems (`tests/`): happy path, silent failure, crash after call, crash before call, lease, pause
-- [x] Mock warehouse, orders and carrier + notify services with chaos toggles (`mocks/`): idempotency keys, drop-writes, carrier API v1 → v2; notifications deliberately don't de-duplicate
-- [x] Crash resume and read-back verification, proven on Atlas: dropped writes caught and retried; `kill -9` mid-recall → restart → exactly one notice per customer (`scripts/check_exactly_once.py`)
-- [x] Setup check (`scripts/check_setup.py`): `.env` present and git-ignored, Atlas reachable, transactions supported, write access to `tracer`, API keys set; never prints a secret
-- [x] API-change repair with vector memory (`agent/repair.py`): on a 4xx, Atlas Vector Search for a proven fix first, else Claude Opus 5.5 proposes a CallSpec (structured JSON output) from the error and the system's current API spec; a guard keeps the same target and the same proof; the fix is tested on one step and saved only after its read-back passes. Proven live: recall 1 repaired by Claude, recall 2 fixed from memory with no LLM call
-- [x] Pause waits and resumes from the same step; the report lists steps that need a human
-- [x] Scope with a reason per item (`agent/plan.py`): what was found in each system by status and what was decided (open order → cancel, shipped → intercept its shipment, delivered → notice only, label printed → skip), plus a cross-check that every shipped order is a shipment the carrier knows
-- [x] Shipped-before-cancel escalation: if a truck collects an order before its cancel lands (409), the agent adds a step to intercept that shipment instead; mocks gained label-printed shipments and an early-pickup switch
-- [x] Live log as a guided recall story (`web/`): six chapters, the per-system breakdown with reasons, disruption buttons in the chapter where they happen (warehouse glitch, truck arrives early, carrier API change, crash mid-step), plain-English log, proof and insights from Atlas, recall 1 vs recall 2 comparison
-- [x] 12 agent loop tests: also LLM repair saved to memory, memory reuse with no LLM call, unsafe fix rejected, pause and resume, crash on demand, escalation, cross-check
-- [x] Client console (`/console`, `web/console.html`): the supplier directs the agent: declare a recall in plain language, approve the plan, resolve items left for a human, read the report. No charts
-- [x] Intake agent (`agent/intake.py`): text in / JSON out (`interpret`, `explain`) so a voice agent can call the same functions; Claude reads the message and searches the supplier's lot records, code decides; nothing changes until the supplier approves
-- [x] Supplier lot records in Atlas (`store/catalogue.py`, `supplier_lots`): products, lots, QA findings, searched with Automated Embedding vector search
-- [x] Large synthetic world (`mocks/world.py`): ~650 lots, ~5,000 cases, 15,000 orders, 6,000 customers, ~13,000 shipments, so a recall is a needle in a haystack; `/stats` on each mock
-- [x] Recall proof script (`scripts/prove_recall.py`): read-only check that every business system agrees with what Tracer wrote in Atlas; unfinished runs keep their report as `needs_attention`
-- [x] Step trace on the live log (`/trace` in `web/app.py`, `web/index.html`): click any step to see every write to Atlas in order, the call rebuilt from the CallSpec in force, the read-back and its proof, each repair and restart, with the reason for each; a list of the steps that hit a problem, tagged from the audit log; and a read-only check of the business system's record against the proof in Atlas
-- [x] Voice in the supplier console (`web/voice.py`, `web/voice.js`): ElevenLabs voice agent that speaks through the same chat as typing, plus a narrator that reads Tracer's updates aloud
+Everything here was written on Nov 14, 2026:
+
+- [x] Atlas schema: `steps`, `audit_log`, `experiences`, `control` and `supplier_lots`, with `$jsonSchema` validators, unique idempotency keys and a TTL on learned fixes
+- [x] Step store: step and audit entry in one transaction, lease with `findOneAndUpdate`, pause flag, report
+- [x] Agent loop: write-ahead `sent` before every call, read-back verification with stored proof, same-key retries, crash reconcile, policy gate
+- [x] Scoping with a reason for every item, plus a cross-check that every shipped order is a shipment the carrier knows
+- [x] Shipped-before-cancel escalation to an intercept
+- [x] API-change repair with Claude (structured output), tested on one step, saved to vector memory only after read-back passes; recall 2 reuses it with no LLM call
+- [x] Vector memory and lot search with Atlas Automated Embedding
+- [x] Three mock business systems with idempotency, dropped writes, carrier API v1 → v2, early pickup, and a large synthetic world
+- [x] Supplier console with plain-language intake, approval before any change, and voice (ElevenLabs)
+- [x] Live log over a change stream, with disruption buttons and a per-step trace from plan to proof
+- [x] Proof scripts (`prove_recall`, `check_exactly_once`, `compare_recalls`) and 33 tests

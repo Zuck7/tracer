@@ -2,7 +2,7 @@
 
     python -m store.setup_db
 
-Shapes follow docs/03-contracts.md section 8.
+Shapes follow docs/contracts.md section 8.
 """
 from pymongo import ASCENDING
 from pymongo.errors import CollectionInvalid, OperationFailure
@@ -96,7 +96,7 @@ def ensure_vector_index() -> None:
         print(f"  created  vector index {VECTOR_INDEX_NAME} (builds in the background)")
     except OperationFailure as e:
         print(f"  FAILED   vector index: {e.details.get('errmsg', e)}")
-        print("           -> Automated Embedding may not be available; see docs/04-roadmap.md risks")
+        print("           -> Automated Embedding may not be available on this cluster")
 
 
 def main() -> None:

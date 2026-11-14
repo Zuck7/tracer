@@ -1,31 +1,31 @@
-# 02 · Architecture
+# Architecture
 
 ## Components
 
 ```
                             HTTP (Idempotency-Key header on every write)
 ┌─────────────────────────┐ ───────────────────────────────▶ ┌───────────────────────────────┐
-│ Agent  (agent/, A)      │                                   │ Warehouse mock   :8001  (C)  │
-│  scope → plan → policy  │ ◀───── read back every write ──── │ Orders mock      :8002  (C)  │
-│  → send → verify        │                                   │ Carrier + notify :8003  (C)  │
+│ Agent  (agent/)         │                                   │ Warehouse mock   :8001       │
+│  scope → plan → policy  │ ◀───── read back every write ──── │ Orders mock      :8002       │
+│  → send → verify        │                                   │ Carrier + notify :8003       │
 │  repair (LLM) on errors │                                   │  each: /chaos, /reset         │
 └───────────┬─────────────┘                                   └───────────────────────────────┘
-            │ pymongo (store/, B)                                         ▲ chaos buttons
+            │ pymongo (store/)                                            ▲ chaos buttons
             ▼                                                             │
 ┌───────────────────────────────────────────────┐     ┌───────────────────┴───────────┐
-│ MongoDB Atlas · database `tracer`             │     │ Live log  :8000  (web/, C)    │
+│ MongoDB Atlas · database `tracer`             │     │ Live log  :8000  (web/)       │
 │  steps · audit_log · experiences · control    │ ──▶ │ change stream → browser (SSE) │
 └───────────────────────────────────────────────┘     │ countdown, chaos, kill button │
                                                       └───────────────────────────────┘
 ```
 
-| Component | Owner | Job |
-|---|---|---|
-| `agent/` | A | The loop: scope the lot, plan steps, check policy, call the systems, read back, repair |
-| `store/` | B | Every MongoDB read and write. The agent never touches `pymongo` directly; it calls `store` functions |
-| `mocks/` | C | Three fake business systems with in-memory state, seeded data and chaos toggles |
-| `web/` | C | The live log page and the chaos/kill buttons |
-| Atlas | B | The agent's memory: task state, audit trail, learned fixes, pause flag and lease |
+| Component | Job |
+|---|---|
+| `agent/` | The loop: scope the lot, plan steps, check policy, call the systems, read back, repair |
+| `store/` | Every MongoDB read and write. The agent never touches `pymongo` directly; it calls `store` functions |
+| `mocks/` | Three fake business systems with in-memory state, seeded data and chaos toggles |
+| `web/` | The live log (with the disruption buttons and step trace) and the supplier console |
+| Atlas | The agent's memory: task state, audit trail, learned fixes, pause flag and lease |
 
 **Why the mocks keep their state in memory, not in Atlas:** they stand in for *someone else's* systems. If the agent could read their state from its own database, read-back would prove nothing. Keeping them separate makes the verification honest. Their state survives an agent crash because they run as separate processes.
 
@@ -108,7 +108,7 @@ Reconcile rules for each `sent` step:
 | Effect is missing | The crash happened before the call landed | Send again with the **same key** |
 | Notifications count > 1 | Should never happen | `failed`, audit `"duplicate_detected"`, alert in the live log |
 
-**Why this matters for notifications:** the notify mock deliberately does **not** de-duplicate (like real SMS and email gateways). If the agent replayed step 45, the customer would get two notices. Only reconcile prevents that. That's the line for the judges: *"Most agents would redo this step or skip it. Both are wrong. Watch it check the real system instead."*
+**Why this matters for notifications:** the notify mock deliberately does **not** de-duplicate (like real SMS and email gateways). If the agent replayed step 45, the customer would get two notices. Only reconcile prevents that. Most agents would either redo the step or skip it, and both are wrong: Tracer checks the real system instead.
 
 **The lease:** `control.lease_owner` is the worker ID (`WORKER_ID` env, default `worker-1`), with `lease_expires` 15 seconds out, renewed every step. A restarted process with the same `WORKER_ID` reclaims its own lease immediately. A *different* worker must wait for the lease to expire. That's what stops two agents notifying the same customers at once.
 
@@ -140,7 +140,7 @@ sequenceDiagram
     end
 ```
 
-- **CallSpec** is how the agent describes one API call: method, path template, body template, read-back path, the field to check and the expected values. Exact shape in [03-contracts.md §6](03-contracts.md#6-callspec-and-the-repair-contract).
+- **CallSpec** is how the agent describes one API call: method, path template, body template, read-back path, the field to check and the expected values. Exact shape in [contracts.md §6](contracts.md#6-callspec-and-the-repair-contract).
 - **Tested on one step first.** A wrong LLM guess costs one failed step, not 8.
 - **Saved only after read-back passes.** Memory only holds fixes that are proven to work.
 - **Recall 2** (`RC-OB-3107`, a different lot) hits the same carrier change. Memory returns the saved CallSpec, so there's no LLM call and the fix works first try. The report compares recall 1 and recall 2: failed attempts, LLM calls, time to recover.
@@ -148,7 +148,7 @@ sequenceDiagram
 
 ## Flow 5: pause
 
-A reviewer sets `control.paused = true` (from the live log or Atlas). The agent checks the flag before each step and stops within one step, audit `"paused"`. Setting it back to `false` and restarting continues from where it stopped. Start by reading the `control` document before every step (one cheap query). Upgrade to a change stream if time allows.
+A reviewer sets `control.paused = true` (from the live log or Atlas). The agent reads the `control` document before every step, so it stops within one step, audit `"paused"`, and waits. Setting it back to `false` resumes from the same step. The live log itself is fed by a change stream on `audit_log`.
 
 ## Policy gate
 
@@ -162,7 +162,7 @@ A denied target is **not** turned into a step. It gets an `audit_log` entry with
 
 ## What the live log shows
 
-One line per step event, newest at the top, colour by status, streamed from a change stream on `steps` and `audit_log`:
+One line per step event, newest at the top, colour by status, streamed from a change stream on `audit_log`:
 
 ```
 11:02:14  #45  notify    CUST-118   sent       attempt 1

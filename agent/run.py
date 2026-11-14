@@ -5,7 +5,7 @@
 One run: claim the lease → plan (first run only) → reconcile leftovers from a
 crash → work through every planned/failed step in seq order → report.
 
-Per step (docs/02-architecture.md, Flow 1):
+Per step (docs/architecture.md, Flow 1):
     policy check → mark_sent (saved BEFORE the call) → call with the step's
     idempotency key → read the record back → verified (with proof) or failed.
 A failed step is retried with the same key, up to MAX_ATTEMPTS. Before a

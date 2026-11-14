@@ -1,4 +1,4 @@
-"""Synthetic seed data for both recalls. Matches docs/03-contracts.md section 7.
+"""Synthetic seed data for both recalls. Matches docs/contracts.md section 7.
 
 Recall 1  RC-GB-2611  lot GB-2611  20 holds + 10 cancels + 8 intercepts + 22 notices = 60 steps
 Recall 2  RC-OB-3107  lot OB-3107   8 holds +  4 cancels + 4 intercepts +  8 notices = 24 steps
