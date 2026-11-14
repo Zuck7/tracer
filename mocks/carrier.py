@@ -50,17 +50,6 @@ def _intercept(s: dict, recall_id: str, idempotency_key: str, id_key: str, prefi
 
 # ---------- shipments (versioned) ----------
 
-@app.get("/stats")
-def stats():
-    """Size of the carrier's whole book, so the recalled lot can be shown against normal traffic."""
-    shipments = state.data["shipments"].values()
-    by_status: dict[str, int] = {}
-    for s in shipments:
-        by_status[s["status"]] = by_status.get(s["status"], 0) + 1
-    return {"shipments": len(shipments), "by_status": by_status,
-            "notifications": len(state.data["notifications"])}
-
-
 @app.get("/shipments")
 def list_shipments(lot: str):
     return [{k: v for k, v in _out(s).items() if k != "intercept"}
