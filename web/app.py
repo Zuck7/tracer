@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from agent.config import RECALLS as CATALOGUE
 from store.db import db
+from web import voice
 
 ROOT = Path(__file__).resolve().parent.parent
 MOCKS = {
@@ -36,6 +37,7 @@ RECALLS = {"RC-GB-2611": "GB-2611", "RC-OB-3107": "OB-3107"}
 ACTIONS = ["hold_inventory", "cancel_order", "intercept_shipment", "notify_customer"]
 
 app = FastAPI(title="Tracer live log")
+app.include_router(voice.router)  # voice in the supplier portal: /voice/* (web/voice.py)
 agent_proc: subprocess.Popen | None = None
 agent_recall: str | None = None   # which recall the running agent process belongs to
 
@@ -85,6 +87,11 @@ def index():
 def console():
     """Client console: declare a recall, approve the plan, follow the run, resolve, report."""
     return FileResponse(Path(__file__).parent / "console.html")
+
+
+@app.get("/voice.js")
+def voice_js():
+    return FileResponse(Path(__file__).parent / "voice.js", media_type="text/javascript")
 
 
 @app.get("/judge")

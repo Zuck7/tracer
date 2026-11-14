@@ -182,6 +182,12 @@
     body.printing .print-target { position: absolute; left: 0; top: 0; max-width: none; border: 0; }
     body.printing .print-target .noprint { display: none; }
   }
+
+  /* voice (web/voice.js): the same chat, spoken */
+  #vbtn, #nbtn { white-space: nowrap; }
+  #nbtn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  #vbtn.live { background: var(--bad); border-color: var(--bad); color: #fff; }
+  #vstatus { display: block; color: var(--accent); min-height: 1.2em; }
 </style>
 </head>
 <body>
@@ -217,8 +223,11 @@
         <form id="form">
           <textarea id="input" rows="1" placeholder="Tell Tracer what happened…" aria-label="Message to Tracer"></textarea>
           <button class="btn primary send" id="sendBtn" type="submit">Send</button>
+          <button class="btn" id="vbtn" type="button" aria-label="Talk to Tracer by voice">🎙 Talk</button>
+          <button class="btn" id="nbtn" type="button" aria-pressed="false" aria-label="Read Tracer's updates aloud">🔈 Narrate</button>
         </form>
         <small>Enter to send, Shift+Enter for a new line.</small>
+        <small id="vstatus" aria-live="polite"></small>
       </div>
     </section>
 
@@ -844,5 +853,6 @@ function greet() {
   $("input").focus();
 })();
 </script>
+<script type="module" src="/voice.js"></script>
 </body>
 </html>
