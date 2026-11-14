@@ -89,6 +89,36 @@ Reset before every demo run: `scripts/reset_demo.sh` (re-seeds mocks, clears `st
   ```
 - **No secrets in code, docs, commits or screenshots.** `.env` only.
 
+## Syncing two people (worker-a = Agent, worker-b = Atlas + mocks + demo)
+
+| Thing | Owner | Rule |
+|---|---|---|
+| `agent/`, `tests/` | worker-a | Only worker-a edits |
+| `store/`, `mocks/`, `web/`, `scripts/` | worker-b | Only worker-b edits |
+| `agent/store_api.py` (StoreAPI) | both | The A↔B contract. Message the other person **before** changing a signature |
+| `docs/03-contracts.md` | both | The A↔mocks contract. Same rule |
+| `README.md`, `requirements.txt`, `.env.example`, `.gitignore` | both | Small edits are fine; pull first, push right away |
+
+**Databases.** Develop in your own database, integrate in the shared one:
+```
+# .env
+WORKER_ID=worker-a            # or worker-b; never change it between a crash and its restart
+TRACER_DB=tracer_dev_a        # or tracer_dev_b; run `python -m store.setup_db` once
+```
+Remove the `TRACER_DB` line (or set `TRACER_DB=tracer`) only for an integration run or the demo, and **say "integration run on tracer" before you reset it**.
+
+**Lease.** On a shared database the lease blocks a second worker from running the same recall. If a run crashes, restart it with the same `WORKER_ID` to resume at once; a different worker has to wait the 15 s lease expiry.
+
+**Git loop**, every time:
+```bash
+git pull --rebase          # before you start, and before every push
+# work in your folder, run the tests
+git add <your files>       # never `git add .` (it would pick up .env, agent.log, stray folders)
+git commit -m "store: ..." && git pull --rebase && git push
+```
+
+**Checkpoints.** At each roadmap gate, one message: what you pushed, what you verified, what you need from the other person.
+
 ## Git workflow
 
 - Work on `main`, commit small and often, folder by folder.
