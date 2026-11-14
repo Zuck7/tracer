@@ -59,6 +59,16 @@ Record it with a screen recorder at 1080p. Cut dead time. Captions help if the r
 | What's mocked? | The three business systems, so failures happen on cue. Atlas is real. Data is synthetic |
 | How would this go to production? | Swap mocks for real WMS/OMS/carrier APIs behind the same CallSpec layer. The step engine doesn't change |
 
+## Project description (paste into the Cerebral Valley form)
+
+> Tracer is an AI agent that runs a product recall end to end and proves every step worked. Given a contaminated lot, it holds the stock in the warehouse, cancels open orders, intercepts shipments on the road and notifies every affected customer exactly once, across three separate systems.
+>
+> Every step is saved in MongoDB Atlas before it is sent and is marked done only after the agent reads the real system back, so it catches writes that were silently dropped. When the agent is killed mid-run, it resumes by checking the real systems, without repeating or skipping a step. When the carrier changes its API, Claude proposes a new call, the agent tests it on one shipment and saves the proven fix to Atlas Vector Search. The next recall reuses that fix with no LLM call.
+>
+> Built today: the agent, the Atlas state and audit layer (transactions, schema validation, leases, change streams, Vector Search with Automated Embedding), three mock business systems with failure switches, and a live log. Track 3: Finish the Job. All data is synthetic.
+
+**Demo tip:** a newly saved fix takes up to about 25 seconds to become searchable in Atlas. Recall 1 saves it at step 31 and keeps running for longer than that, so start recall 2 only after recall 1 has finished.
+
 ## Submission checklist (4:40 PM)
 
 - [ ] `git log` and `git grep -i "mongodb+srv"` show no secrets. `.env` is not tracked

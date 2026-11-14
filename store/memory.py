@@ -53,10 +53,29 @@ def find_fix(system: str, situation: str, min_score: float = MIN_SCORE) -> dict[
 def save_fix(system: str, action: str, situation: str, fix: dict[str, Any], source_recall: str) -> bool:
     """Save a fix that passed read-back. Returns False if this exact situation is already stored."""
     result = db.experiences.update_one(
-        {"system": system, "action": action, "situation": situation},
+        # verified: True in the filter, so a retired fix for the same situation is left as
+        # history and the new fix is stored as a fresh document.
+        {"system": system, "action": action, "situation": situation, "verified": True},
         {"$setOnInsert": {"system": system, "action": action, "situation": situation, "fix": fix,
                           "verified": True, "source_recall": source_recall, "uses": 0,
                           "created_at": now()}},
         upsert=True,
     )
     return result.upserted_id is not None
+
+
+def retire_fix(system: str, situation: str, reason: str) -> bool:
+    """Stop trusting the remembered fix for this situation. Call it when a fix from memory
+    fails its read-back test: the system has changed again, so the memory is now wrong.
+
+    The fix is kept (verified: False, with the reason and time) so a reviewer can see what
+    the agent used to believe, but find_fix only returns verified fixes, so it is never
+    used again. Returns False if there was nothing to retire.
+    """
+    hit = find_fix(system, situation)
+    if not hit:
+        return False
+    db.experiences.update_one(
+        {"_id": hit["_id"]},
+        {"$set": {"verified": False, "retired_at": now(), "retired_reason": reason}, "$inc": {"uses": -1}})
+    return True
