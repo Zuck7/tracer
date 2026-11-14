@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+pymongo>=4.7
+python-dotenv
+httpx
+anthropic
