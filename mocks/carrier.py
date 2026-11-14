@@ -170,3 +170,12 @@ def pickup(body: PickupIn):
         shipment["status"] = "in_transit"
     print(f"[carrier] CHAOS: {body.tracking_no} picked up early, now in transit")
     return _out(shipment)
+
+
+@app.get("/stats")
+def stats():
+    by_status: dict[str, int] = {}
+    for s in state.data["shipments"].values():
+        by_status[s["status"]] = by_status.get(s["status"], 0) + 1
+    return {"shipments": len(state.data["shipments"]), "by_status": by_status,
+            "notifications": len(state.data["notifications"])}

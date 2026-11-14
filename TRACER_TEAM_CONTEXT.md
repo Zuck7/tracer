@@ -30,7 +30,7 @@ The hard part, and the reason we win: it **survives crashes, silent failures and
 | Must build in the provided Atlas Sandbox | Everything lives in Zuhriddin's sandbox project, `Cluster0`, database `tracer` |
 | Repo must be public | **Never commit `.env` or the connection string.** Add `.env` to `.gitignore` before the first commit |
 | New work only | All code written today after 10:45. README must list what we built |
-| Banned: basic RAG, Streamlit, dashboard-as-main-feature | Our UI is just a live log, never the product |
+| Banned: basic RAG, Streamlit, dashboard-as-main-feature | Our UI is a live log plus a client console for directing the agent. Never the product, never analytics |
 | Submission | 1-minute demo video + public repo, due **5:00 PM** |
 
 **Judging (round 1):** Technical demo 35% · Implementation difficulty 30% · Impact 20% · Creativity 15%

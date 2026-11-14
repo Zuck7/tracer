@@ -261,6 +261,9 @@ def test_unsafe_llm_fix_is_rejected_and_left_for_a_human() -> None:
     assert {i["target_id"] for i in report["needs_attention"]} == {
         f"TRK-{5000 + i}" for i in range(1, 9)}
     assert all(fake.shipments[f"TRK-{5000 + i}"]["status"] == "in_transit" for i in range(1, 9))
+    # the report survives for whoever finishes the job by hand
+    assert store.control[RID]["status"] == "needs_attention"
+    assert len(store.control[RID]["report"]["needs_attention"]) == 8
 
 
 if __name__ == "__main__":

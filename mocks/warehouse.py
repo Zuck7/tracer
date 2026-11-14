@@ -46,3 +46,10 @@ def hold_unit(unit_id: str, body: HoldIn, idempotency_key: str | None = Header(d
 
     return state.write(idempotency_key, apply,
                        fake=lambda: {"unit_id": unit_id, "status": "hold", "hold_id": hold_id})
+
+
+@app.get("/stats")
+def stats():
+    units = state.data["units"].values()
+    return {"cases": len(state.data["units"]), "lots": len({u["lot"] for u in units}),
+            "skus": len({u["sku"] for u in units})}

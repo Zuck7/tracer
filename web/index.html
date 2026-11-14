@@ -24,6 +24,7 @@
          display: grid; gap: 12px 28px; grid-template-columns: auto 1fr auto; align-items: center; }
   .brand { display: flex; align-items: center; gap: 14px; }
   .brand b { font: 30px/1 var(--num); letter-spacing: .02em; }
+  .brand .portal { color: var(--muted); font-size: 14px; white-space: nowrap; }
   select { background: var(--deck-2); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; }
   .problem { margin: 0; font-size: 18px; max-width: 62ch; }
   .problem strong { color: var(--hazard); font-weight: 600; }
@@ -196,6 +197,7 @@
 <header class="top">
   <div class="brand">
     <b>Tracer</b>
+    <a class="portal" href="/console">Supplier portal</a>
     <select id="recall" aria-label="Recall">
       <option value="RC-GB-2611">Recall 1: granola bars, lot GB-2611</option>
       <option value="RC-OB-3107">Recall 2: oat bars, lot OB-3107</option>
@@ -541,6 +543,25 @@ async function loadCompare() {
   } catch (e) { /* comparison is optional */ }
 }
 
+
+// "Searched 4,812 cases … Lot GB-2611 is in 20 cases, …": the haystack (mock /stats via /state.world)
+// next to the needle (the agent's scope).
+function searchedLine(world, scope) {
+  const n = (x) => (typeof x === "number" ? x.toLocaleString("en-US") : null);
+  const w = world || {};
+  const cases = n(w.warehouse?.cases), orders = n(w.orders?.orders), ships = n(w.carrier?.shipments), cust = n(w.orders?.customers);
+  const bits = [cases && `${cases} cases in the warehouse`, orders && `${orders} orders`, ships && `${ships} shipments`].filter(Boolean);
+  const first = bits.length
+    ? `Searched ${bits.length > 1 ? `${bits.slice(0, -1).join(", ")} and ${bits[bits.length - 1]}` : bits[0]}${cust ? ` for ${cust} customers` : ""}. `
+    : "";
+  const inLot = (scope.warehouse || []).filter((i) => i.decision !== "refuse").length;
+  const ord = (scope.orders || []).filter((i) => i.decision !== "refuse").length;
+  const shp = (scope.carrier || []).filter((i) => i.decision === "intercept").length;
+  const homes = (scope.customers || []).length;
+  const c = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  return `${first}Lot ${scope.lot} is in ${c(inLot, "case", "cases")}, ${c(ord, "order", "orders")}, ${c(shp, "shipment", "shipments")} on trucks and ${c(homes, "home", "homes")}.`;
+}
+
 // ---------- chapter 1: where the lot was found, and what Tracer decided ----------
 function chipLabel(sysKey, status, decision, n) {
   if (decision === "refuse") return `${n} from another lot: refuse`;
@@ -553,6 +574,7 @@ function chipLabel(sysKey, status, decision, n) {
 
 function scopeNode() {
   const wrap = el("div"), box = el("div", "scope");
+  wrap.append(el("p", "progress", searchedLine(S?.world, SCOPE)));
   for (const sys of SYSTEMS) {
     const items = SCOPE[sys.key] || [];
     const det = el("details", "sys"), sum = el("summary");

@@ -64,3 +64,13 @@ def pickup(body: PickupIn):
         order["status"] = "shipped"
     print(f"[orders] CHAOS: truck picked up {order['order_id']} early ({order['tracking_no']})")
     return {"order_id": order["order_id"], "tracking_no": order["tracking_no"], "status": "shipped"}
+
+
+@app.get("/stats")
+def stats():
+    orders = state.data["orders"].values()
+    by_status: dict[str, int] = {}
+    for o in orders:
+        by_status[o["status"]] = by_status.get(o["status"], 0) + 1
+    return {"orders": len(state.data["orders"]),
+            "customers": len({o["customer_id"] for o in orders}), "by_status": by_status}

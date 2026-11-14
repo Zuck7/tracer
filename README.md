@@ -44,3 +44,8 @@ cp .env.example .env   # then fill in MONGODB_URI and LLM_API_KEY
 - [x] Shipped-before-cancel escalation: if a truck collects an order before its cancel lands (409), the agent adds a step to intercept that shipment instead; mocks gained label-printed shipments and an early-pickup switch
 - [x] Live log as a guided recall story (`web/`): six chapters, the per-system breakdown with reasons, disruption buttons in the chapter where they happen (warehouse glitch, truck arrives early, carrier API change, crash mid-step), plain-English log, proof and insights from Atlas, recall 1 vs recall 2 comparison
 - [x] 12 agent loop tests: also LLM repair saved to memory, memory reuse with no LLM call, unsafe fix rejected, pause and resume, crash on demand, escalation, cross-check
+- [x] Client console (`/console`, `web/console.html`): the supplier directs the agent: declare a recall in plain language, approve the plan, resolve items left for a human, read the report. No charts
+- [x] Intake agent (`agent/intake.py`): text in / JSON out (`interpret`, `explain`) so a voice agent can call the same functions; Claude reads the message and searches the supplier's lot records, code decides; nothing changes until the supplier approves
+- [x] Supplier lot records in Atlas (`store/catalogue.py`, `supplier_lots`): products, lots, QA findings, searched with Automated Embedding vector search
+- [x] Large synthetic world (`mocks/world.py`): ~650 lots, ~5,000 cases, 15,000 orders, 6,000 customers, ~13,000 shipments, so a recall is a needle in a haystack; `/stats` on each mock
+- [x] Recall proof script (`scripts/prove_recall.py`): read-only check that every business system agrees with what Tracer wrote in Atlas; unfinished runs keep their report as `needs_attention`

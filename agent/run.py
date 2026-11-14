@@ -403,6 +403,11 @@ class Agent:
         report["status"] = "done" if done else "incomplete"
         if done:
             self.store.finish(self.rid, report)
+        else:
+            # Keep the report for the people who must finish the job by hand.
+            save = getattr(self.store, "save_report", None)
+            if save:
+                save(self.rid, report)
         self._print_report(report)
         return report
 

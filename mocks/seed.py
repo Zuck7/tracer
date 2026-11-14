@@ -3,8 +3,11 @@
 Recall 1  RC-GB-2611  lot GB-2611  20 holds + 10 cancels + 8 intercepts + 22 notices = 60 steps
 Recall 2  RC-OB-3107  lot OB-3107   8 holds +  4 cancels + 4 intercepts +  8 notices = 24 steps
 Decoy     UNIT-0099   lot GB-2612  returned by the fuzzy warehouse search; the policy gate must deny it
+World     mocks/world.py: ~650 other lots, ~5,000 cases, 15,000 orders, 6,000 customers, ~13,000 shipments
 """
 from datetime import datetime, timedelta, timezone
+
+from mocks import world
 
 PICKUP_IN_MINUTES = 10  # countdown to the next truck pickup, from reset time
 
@@ -25,6 +28,7 @@ def inventory() -> dict[str, dict]:
     add("UNIT-0099", "GRB-OAT-12", "GB-2612", "A-05-01")          # decoy, different lot
     for i in range(101, 109):
         add(f"UNIT-{i:04d}", "OAT-BAR-06", "OB-3107", f"B-01-{i - 100:02d}")
+    units.update(world.units())  # ~5,000 cases of other lots: the haystack
     return units
 
 
@@ -47,6 +51,7 @@ def orders() -> dict[str, dict]:
         add(f"ORD-{2001 + n}", f"CUST-{201 + n}", "OB-3107", "open", f"TRK-{7101 + n}")
     for n in range(4):
         add(f"ORD-{2005 + n}", f"CUST-{205 + n}", "OB-3107", "shipped", f"TRK-{6001 + n}")
+    out.update(world.orders())  # 15,000 orders of other lots
     return out
 
 
@@ -70,4 +75,5 @@ def shipments() -> dict[str, dict]:
         add(f"TRK-{7001 + n}", f"ORD-{1001 + n}", "GB-2611", "label_created")
     for n in range(4):
         add(f"TRK-{7101 + n}", f"ORD-{2001 + n}", "OB-3107", "label_created")
+    out.update(world.shipments(pickup))  # ~13,000 shipments of other lots
     return out

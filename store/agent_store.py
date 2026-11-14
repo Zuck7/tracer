@@ -68,6 +68,13 @@ class AtlasStore:
             {"$set": {"status": "done", "finished_at": now(), "report": report, "lease_owner": None}},
         )
 
+    def save_report(self, recall_id: str, report: dict[str, Any]) -> None:
+        """A run that ended with items left for a human: keep its report, release the lease."""
+        db.control.update_one(
+            {"recall_id": recall_id},
+            {"$set": {"status": "needs_attention", "report": report, "lease_owner": None}},
+        )
+
     # ---------- steps: each transition writes the step and its audit entry together ----------
 
     def count_steps(self, recall_id: str) -> int:

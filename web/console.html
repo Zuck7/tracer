@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Northfield Foods supplier portal</title>
+<style>
+  :root {
+    --paper: #f3f6f5; --card: #ffffff; --ink: #14232b; --muted: #5d6c73; --rule: #dae2e2;
+    --accent: #0b6e69; --accent-soft: #e2f0ee; --accent-ink: #ffffff;
+    --warn: #96570a; --warn-soft: #fbf0db; --bad: #b3291f; --bad-soft: #fbe8e6;
+    --me: #14232b;
+    --head: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --num: "DIN Alternate", Bahnschrift, "Avenir Next", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; height: 100%; }
+  body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font: 16px/1.5 var(--body); }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  p { margin: 0; }
+  a { color: var(--accent); }
+  [hidden] { display: none !important; }
+
+  .shell { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+  /* ---------- top bar ---------- */
+  .top { display: flex; align-items: center; gap: 16px 24px; padding: 12px 24px; background: var(--card);
+         border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+  .brand b { font: 700 20px/1.1 var(--head); display: block; }
+  .brand span { color: var(--muted); font-size: 14px; }
+  .top .spacer { flex: 1; }
+  .behind { display: flex; align-items: center; gap: 14px; font-size: 14px; color: var(--muted); }
+  .behind a { color: var(--muted); }
+  .demo { position: relative; }
+  .demo summary { cursor: pointer; list-style: none; border: 1px dashed #b5c1c3; border-radius: 6px; padding: 4px 10px; }
+  .demo summary::-webkit-details-marker { display: none; }
+  .demo .menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; width: 290px; background: var(--card);
+                border: 1px solid var(--rule); border-radius: 10px; padding: 12px; box-shadow: 0 10px 30px rgba(20,35,43,.12);
+                display: grid; gap: 6px; }
+  .demo .menu p { margin-bottom: 4px; }
+  .demo .menu button { text-align: left; border: 1px solid var(--rule); background: var(--paper); border-radius: 6px;
+                       padding: 7px 10px; cursor: pointer; font-size: 14px; color: var(--ink); }
+  .demo .menu button:hover { border-color: var(--muted); }
+  .tabs { display: none; }
+
+  /* ---------- main split ---------- */
+  .split { min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(340px, 1fr); }
+  .chat { min-height: 0; display: grid; grid-template-rows: 1fr auto; background: var(--paper); }
+  .ws { min-height: 0; overflow: auto; background: var(--card); border-left: 1px solid var(--rule); padding: 24px 28px 40px; }
+
+  /* ---------- conversation ---------- */
+  #thread { overflow: auto; padding: 28px 28px 12px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 640px; display: grid; gap: 4px; }
+  .msg .who { font-size: 13px; color: var(--muted); }
+  .msg .bubble { padding: 11px 15px; border-radius: 14px; white-space: pre-wrap; }
+  .msg.tracer .bubble { background: var(--card); border: 1px solid var(--rule); border-top-left-radius: 4px; }
+  .msg.supplier { align-self: flex-end; justify-items: end; }
+  .msg.supplier .bubble { background: var(--me); color: #fff; border-top-right-radius: 4px; }
+  .msg.moment .bubble { border-left: 4px solid var(--accent); }
+  .msg.moment.warn .bubble { border-left-color: var(--warn); } .msg.moment.bad .bubble { border-left-color: var(--bad); }
+  .msg.moment .bubble b { display: block; font-family: var(--head); }
+  .msg .meta { font-size: 13px; color: var(--muted); }
+  .msg.error .bubble { background: var(--bad-soft); border-color: #f0c8c4; }
+  .typing .bubble { display: flex; gap: 5px; align-items: center; padding: 15px; width: 64px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+
+  .card { background: var(--card); border: 1px solid var(--rule); border-radius: 14px; border-top-left-radius: 4px;
+          padding: 16px 18px; display: grid; gap: 12px; max-width: 640px; }
+  .card h3 { margin: 0; font: 600 18px/1.25 var(--head); }
+  .card .sub { color: var(--muted); }
+  .card .big { font: 40px/1 var(--num); }
+  .card .big small { font: 16px/1.3 var(--body); color: var(--muted); margin-left: 6px; }
+  .note { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 9px 12px; }
+  .note.warn { border-color: var(--warn); background: var(--warn-soft); } .note.bad { border-color: var(--bad); background: var(--bad-soft); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .btn { border: 1px solid var(--rule); background: var(--card); border-radius: 8px; padding: 8px 16px; cursor: pointer; font-weight: 600; }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover { background: #095c58; }
+  .btn.small { padding: 5px 11px; font-size: 14px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .places { border-bottom: 1px solid var(--rule); }
+  .sys { border-top: 1px solid var(--rule); }
+  .sys summary { cursor: pointer; list-style: none; padding: 9px 0; display: grid; gap: 6px 12px; grid-template-columns: 1fr auto; }
+  .sys summary::-webkit-details-marker { display: none; }
+  .sys .name { font-weight: 600; } .sys .name b { font: 20px/1 var(--num); margin: 0 4px 0 8px; }
+  .sys .more { color: var(--accent); font-size: 14px; }
+  .sys[open] .more::after { content: " ▴"; } .sys .more::after { content: " ▾"; }
+  .chips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 1px 9px; border-radius: 12px; font-size: 14px; border: 1px solid var(--rule); color: var(--muted); background: var(--paper); }
+  .chip.act { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .chip.refuse { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }
+  .items { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; font-size: 15px; }
+  .items .id { font: 15px/1.4 var(--num); margin-right: 8px; } .items .reason { display: block; color: var(--muted); }
+  .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 15px; }
+  .checks .ok { color: var(--accent); font-weight: 600; } .checks .bad { color: var(--bad); font-weight: 600; }
+  .phases { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+  .phases li { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: baseline; }
+  .phases .tick { color: var(--accent); font-weight: 700; } .phases .wait { color: var(--muted); }
+  .phases .n { font: 18px/1 var(--num); }
+  .bar { height: 6px; background: var(--rule); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .4s; }
+  .totals { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+  .totals b { font: 20px/1.3 var(--num); margin-right: 4px; }
+  .need { border: 1px solid var(--rule); border-left: 4px solid var(--warn); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; }
+  .need.handed { border-left-color: var(--rule); background: var(--paper); }
+  .need input { flex: 1; min-width: 150px; border: 1px solid var(--rule); border-radius: 6px; padding: 5px 9px; font-size: 14px; }
+  .chipsugg { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chipsugg button { border: 1px solid var(--accent); color: var(--accent); background: var(--card); border-radius: 18px;
+                     padding: 6px 14px; cursor: pointer; }
+  .chipsugg button:hover { background: var(--accent-soft); }
+
+  /* composer */
+  .composer { border-top: 1px solid var(--rule); background: var(--card); padding: 12px 20px 14px; }
+  .composer form { display: flex; gap: 10px; align-items: flex-end; max-width: 760px; }
+  .composer textarea { flex: 1; resize: none; border: 1px solid var(--rule); border-radius: 12px; padding: 10px 14px;
+                       min-height: 46px; max-height: 140px; line-height: 1.4; background: var(--paper); }
+  .composer textarea:focus { background: var(--card); }
+  .composer .send { height: 46px; padding: 0 20px; border-radius: 12px; }
+  .composer small { display: block; color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  /* ---------- workspace ---------- */
+  .ws h2 { margin: 0; font: 600 13px/1.2 var(--body); color: var(--muted); }
+  .ws .title { font: 600 24px/1.2 var(--head); margin-top: 6px; }
+  .ws .haz { color: var(--bad); font-weight: 600; }
+  .ws .state { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; color: var(--muted); }
+  .ws .state b { color: var(--ink); }
+  .ws .overall { margin-top: 18px; }
+  .ws .overall .big { font: 36px/1 var(--num); } .ws .overall small { color: var(--muted); margin-left: 6px; }
+  .ws .switch { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .ws .switch button { border: 1px solid var(--rule); background: var(--paper); border-radius: 16px; padding: 3px 12px; font-size: 14px; cursor: pointer; }
+  .ws .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .group { margin-top: 22px; }
+  .group h3 { margin: 0 0 6px; font: 600 16px/1.3 var(--head); display: flex; justify-content: space-between; }
+  .group h3 span { font: 16px/1.3 var(--num); color: var(--muted); }
+  .steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+  .steps > li { border-bottom: 1px solid var(--rule); }
+  .steps button.st { width: 100%; background: none; border: 0; padding: 7px 2px; cursor: pointer; text-align: left;
+                     display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+  .steps button.st:hover { background: var(--paper); }
+  .steps .tgt { font: 15px/1.3 var(--num); }
+  .stat { font-size: 13px; font-weight: 600; padding: 1px 9px; border-radius: 10px; white-space: nowrap; }
+  .stat.waiting { color: var(--muted); background: var(--paper); }
+  .stat.doing { color: #1e5a8a; background: #e3eef8; }
+  .stat.confirmed { color: var(--accent); background: var(--accent-soft); }
+  .stat.problem { color: var(--bad); background: var(--bad-soft); }
+  .stat.other { color: var(--warn); background: var(--warn-soft); }
+  .stat .att { font-weight: 400; margin-left: 4px; }
+  .proof { padding: 8px 12px 12px; background: var(--paper); font-size: 14px; display: grid; gap: 4px; }
+  .proof dl { display: grid; grid-template-columns: 130px 1fr; gap: 2px 10px; margin: 0; }
+  .proof dt { color: var(--muted); } .proof dd { margin: 0; word-break: break-word; }
+  .ws .empty { color: var(--muted); margin-top: 18px; max-width: 40ch; }
+
+  #toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); max-width: min(92vw, 520px);
+           background: var(--ink); color: #fff; padding: 9px 15px; border-radius: 8px; font-weight: 600;
+           opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
+  #toast.show { opacity: 1; }
+
+  @media (max-width: 860px) {
+    .top { padding: 10px 14px; gap: 8px 14px; }
+    .behind { width: 100%; justify-content: space-between; }
+    .demo .menu { right: auto; left: 0; }
+    .tabs { display: flex; background: var(--card); border-bottom: 1px solid var(--rule); }
+    .tabs button { flex: 1; border: 0; background: none; padding: 10px; font-weight: 600; color: var(--muted);
+                   border-bottom: 3px solid transparent; cursor: pointer; }
+    .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+    .shell { grid-template-rows: auto auto 1fr; }
+    .split { grid-template-columns: minmax(0, 1fr); }
+    .split[data-tab="chat"] .ws, .split[data-tab="ws"] .chat { display: none; }
+    .ws { border-left: 0; padding: 18px 16px 32px; }
+    #thread { padding: 16px 14px 10px; }
+    .composer { padding: 10px 12px 12px; }
+    .composer small { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .typing i { animation: none; opacity: .6; } .bar i { transition: none; } }
+  @media print {
+    body.printing * { visibility: hidden; }
+    body.printing .print-target, body.printing .print-target * { visibility: visible; }
+    body.printing .print-target { position: absolute; left: 0; top: 0; max-width: none; border: 0; }
+    body.printing .print-target .noprint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <div class="brand"><b>Northfield Foods</b><span>Supplier portal. Recalls run by Tracer, at your logistics provider.</span></div>
+    <div class="spacer"></div>
+    <div class="behind">
+      <span>Behind the scenes:</span>
+      <a href="/">Agent log</a>
+      <details class="demo" id="demo">
+        <summary>Simulate a failure (demo)</summary>
+        <div class="menu">
+          <p class="muted" style="color:var(--muted);font-size:13px">Demo tooling. Breaks the mock business systems on purpose.</p>
+          <button data-demo="glitch">Warehouse says OK but drops the next hold</button>
+          <button data-demo="pickup">Truck collects an order early</button>
+          <button data-demo="api">Carrier changes its system</button>
+          <button data-demo="crash">Crash Tracer mid-action</button>
+          <button data-demo="reset">Reset the demo and clear the chat</button>
+        </div>
+      </details>
+    </div>
+  </header>
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tabChat" aria-selected="true">Chat with Tracer</button>
+    <button role="tab" id="tabWs" aria-selected="false">Recall workspace</button>
+  </nav>
+
+  <div class="split" id="split" data-tab="chat">
+    <section class="chat" aria-label="Conversation with Tracer">
+      <div id="thread" aria-live="polite"></div>
+      <div class="composer">
+        <form id="form">
+          <textarea id="input" rows="1" placeholder="Tell Tracer what happened…" aria-label="Message to Tracer"></textarea>
+          <button class="btn primary send" id="sendBtn" type="submit">Send</button>
+        </form>
+        <small>Enter to send, Shift+Enter for a new line.</small>
+      </div>
+    </section>
+
+    <aside class="ws" id="ws" aria-label="Recall workspace">
+      <h2>Recall workspace</h2>
+      <div id="wsBody"></div>
+    </aside>
+  </div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls;
+                                 if (text != null) e.textContent = text; return e; };
+const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const word = (n, one, many) => (n === 1 ? one : many);
+const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
+const parseT = (iso) => new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : iso + "Z");
+const clock = (iso) => iso ? parseT(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "";
+function fmtDur(ms) { const s = Math.round(Math.abs(ms) / 1000), m = Math.floor(s / 60); return m ? `${m} min ${s % 60} s` : `${s} s`; }
+function put(box, key, build) {   // rebuild only when the content changes, so clicks and open rows survive polling
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  const open = [...box.querySelectorAll("details")].map((d) => d.open);
+  const node = build();
+  box.replaceChildren(...(node ? [node] : []));
+  box.querySelectorAll("details").forEach((d, k) => { d.open = !!open[k]; });
+}
+
+// ---------- vocabulary: what each action means to a supplier ----------
+const A = {
+  hold_inventory:     { noun: "case", group: "Warehouse", system: "warehouse", record: "warehouse system",
+                        doing: (t) => `locking case ${t} in the warehouse`, done: (t) => `Case ${t} is locked`,
+                        notYet: "is still available to pick", phase: "Lock every case in the warehouse", past: "cases locked" },
+  cancel_order:       { noun: "order", group: "Orders", system: "order system", record: "order system",
+                        doing: (t) => `cancelling order ${t}`, done: (t) => `Order ${t} is cancelled before leaving`,
+                        notYet: "is still open", phase: "Cancel orders before they leave", past: "orders cancelled" },
+  intercept_shipment: { noun: "shipment", group: "Trucks", system: "carrier", record: "carrier's system",
+                        doing: (t) => `bringing back shipment ${t}`, done: (t) => `Shipment ${t} is being brought back`,
+                        notYet: "is still on its way", phase: "Bring back shipments on trucks", past: "shipments brought back" },
+  notify_customer:    { noun: "customer", group: "Homes", system: "notification system", record: "notification system",
+                        doing: (t) => `telling customer ${t}`, done: (t) => `Customer ${t} has been told, once`,
+                        notYet: "has not been told yet", phase: "Tell every customer, once each", past: "customers told" },
+};
+const ORDER = ["hold_inventory", "cancel_order", "intercept_shipment", "notify_customer"];
+const STATUS_WORD = { available: "on the shelf", open: "open", shipped: "on a truck", delivered: "in a home",
+                      in_transit: "on a truck", label_created: "label printed", cancelled: "cancelled" };
+const DECISION_WORD = { hold: "lock it", refuse: "leave it alone", cancel: "cancel", intercept_shipment: "bring its shipment back",
+                        notify_only: "tell the customer", intercept: "bring back", skip: "nothing to do", notify: "tell them" };
+const ACTING = new Set(["hold", "cancel", "intercept_shipment", "intercept", "notify"]);
+const SYSTEMS = [
+  { key: "warehouse", name: "In our warehouse", noun: ["case", "cases"] },
+  { key: "orders", name: "In orders", noun: ["order", "orders"] },
+  { key: "carrier", name: "With the carrier", noun: ["shipment", "shipments"] },
+  { key: "customers", name: "In customers' homes", noun: ["customer", "customers"] },
+];
+const isEscalated = (s) => s.action === "cancel_order" && s.status === "failed" && /^already (shipped|delivered)/.test(s.last_error || "");
+
+
+// "Searched 4,812 cases … Lot GB-2611 is in 20 cases, …": the haystack (mock /stats via /state.world)
+// next to the needle (the agent's scope).
+function searchedLine(world, scope) {
+  const n = (x) => (typeof x === "number" ? x.toLocaleString("en-US") : null);
+  const w = world || {};
+  const cases = n(w.warehouse?.cases), orders = n(w.orders?.orders), ships = n(w.carrier?.shipments), cust = n(w.orders?.customers);
+  const bits = [cases && `${cases} cases in the warehouse`, orders && `${orders} orders`, ships && `${ships} shipments`].filter(Boolean);
+  const first = bits.length
+    ? `Searched ${bits.length > 1 ? `${bits.slice(0, -1).join(", ")} and ${bits[bits.length - 1]}` : bits[0]}${cust ? ` for ${cust} customers` : ""}. `
+    : "";
+  const inLot = (scope.warehouse || []).filter((i) => i.decision !== "refuse").length;
+  const ord = (scope.orders || []).filter((i) => i.decision !== "refuse").length;
+  const shp = (scope.carrier || []).filter((i) => i.decision === "intercept").length;
+  const homes = (scope.customers || []).length;
+  const c = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  return `${first}Lot ${scope.lot} is in ${c(inLot, "case", "cases")}, ${c(ord, "order", "orders")}, ${c(shp, "shipment", "shipments")} on trucks and ${c(homes, "home", "homes")}.`;
+}
+
+// ---------- state ----------
+const STORE_KEY = "northfield-tracer-chat-v1";
+let CAT = [], LIST = [];
+let items = [];            // the conversation: {kind, ...} plain JSON, kept in localStorage
+let rid = null;            // the recall the conversation is about
+let S = null, STEPS = [], EVENTS = [], SCOPE = null;
+let source = null, busy = false, proofSeq = null, explaining = false, deadSeen = null, snapDirty = false;
+let LOTS_N = null;         // how many Northfield production lots Tracer matches messages against
+const cat = (r = rid) => CAT.find((c) => c.recall_id === r) || {};
+
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify({ items, rid })); } catch (e) {} }
+function load() { try { const j = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); if (j) { items = j.items || []; rid = j.rid || null; } } catch (e) {} }
+const has = (pred) => items.some(pred);
+function push(item) { items.push({ at: new Date().toISOString(), ...item }); save(); renderThread(true); }
+
+// ---------- derived ----------
+function counts() {
+  const c = {};
+  for (const a of ORDER) c[a] = { total: 0, verified: 0, failed: 0, sent: 0, escalated: 0 };
+  for (const s of STEPS) if (c[s.action]) {
+    const st = isEscalated(s) ? "escalated" : s.status;
+    c[s.action].total++; c[s.action][st] = (c[s.action][st] || 0) + 1;
+  }
+  for (const a of ORDER) c[a].handled = c[a].verified + c[a].escalated;
+  return c;
+}
+const agentHere = () => !!S?.agent_running && S.agent_recall === rid;
+const agentDied = () => !!S && !agentHere() && S.agent_recall === rid && S.agent_exit_code != null && S.agent_exit_code !== 0
+                        && !["done", "needs_attention"].includes(S.control.status) && S.control.approval?.state !== "pending";
+const finished = () => ["done", "needs_attention"].includes(S?.control?.status);
+function needItems() {
+  const acked = S?.control?.acknowledged || [];
+  const ack = (x) => acked.find((a) => (x.seq != null && a.seq === x.seq) || (x.seq == null && x.target_id && a.target_id === x.target_id));
+  let list;
+  const rep = S?.control?.report;
+  if (rep?.needs_attention && !agentHere()) list = rep.needs_attention.map((x) => ({ ...x }));
+  else {
+    const lastActive = Math.max(0, ...STEPS.filter((s) => s.status !== "planned").map((s) => s.seq));
+    list = STEPS.filter((s) => s.status === "failed" && !isEscalated(s) && (!agentHere() || s.seq < lastActive));
+  }
+  return list.map((x) => ({ ...x, attempts: x.attempts ?? STEPS.find((s) => s.seq === x.seq)?.attempts, ack: ack(x) }));
+}
+function whatHappened(x) {
+  const a = A[x.action] || {}, err = x.last_error || "";
+  if (x.action === "cross_check") return err || "The order system and the carrier disagree.";
+  if (x.status === "planned") return "Not attempted: Tracer stopped this kind of action after a problem it could not fix.";
+  if (err.startsWith("read-back mismatch")) return `The ${a.system} keeps answering OK, but the ${a.noun} ${a.notYet}.`;
+  if (/→ 404/.test(err)) return `The ${a.system} rejected the request. Its system changed and no working fix was found.`;
+  if (/→ 409/.test(err)) return `The ${a.system} refused: ${err.split("409")[1]?.trim() || "conflict"}.`;
+  if (err.startsWith("duplicate")) return "This customer received more than one notice.";
+  if (/no response/.test(err)) return `The ${a.system} did not answer.`;
+  return err || "Tracer could not confirm this action.";
+}
+
+// Notable moments become their own Tracer messages in the chat.
+function moments() {
+  const m = [];
+  for (const ev of EVENTS) {
+    const t = ev.target_id, d = ev.detail || {}, err = d.error || "", a = A[ev.action] || {};
+    if (ev.event === "failed" && err.startsWith("read-back mismatch"))
+      m.push([`g:${t}`, "ok", "I caught a silent failure", `The ${a.system} said OK for ${a.noun} ${t}, but nothing had changed. I checked, saw it, and did it again.`]);
+    if (ev.event === "failed" && /→ 404/.test(err) && ev.action === "intercept_shipment")
+      m.push(["404", "warn", "The carrier's system changed", "My usual request to the carrier is being rejected. I'm working out the new one."]);
+    if (ev.event === "repair_verified")
+      m.push(["fix", "ok", "Carrier change handled", d.source === "memory"
+        ? "I've seen this carrier change before, in an earlier recall, so I reused that fix. No AI call was needed."
+        : `I worked out the new request with Claude, tried it on one shipment (${d.target_id || t}), confirmed it, and I'm using it for the rest. I've saved the fix for next time.`]);
+    if (ev.event === "repair_rejected")
+      m.push([`fixbad:${t}`, "bad", "A fix didn't work", "I tried a new request on one shipment and it failed, so I stopped instead of guessing. The logistics team will need to look."]);
+    if (ev.event === "planned" && d.escalation) {
+      const e = d.escalation;
+      m.push([`esc:${e.order_id}`, "warn", "A truck collected an order early", `Order ${e.order_id} left the warehouse before I could cancel it, so I'm bringing its shipment ${e.tracking_no} back instead.`]);
+    }
+    if (ev.event === "failed" && err.startsWith("already delivered"))
+      m.push([`del:${t}`, "warn", "An order was already delivered", `Order ${t} is already in a home, so its customer will be told.`]);
+    if (ev.event === "reconciled")
+      m.push([`rec:${t}`, "ok", "Back up, nothing repeated", `I restarted and checked ${t} before acting. It had already been done, so I didn't do it twice.`]);
+    if (ev.event === "duplicate_detected")
+      m.push([`dup:${t}`, "bad", "A customer was told twice", `${t} received more than one notice. This needs a person.`]);
+  }
+  for (const x of needItems())
+    if (x.seq != null) m.push([`need:${x.seq}`, "bad", "This one needs a person", `${cap(A[x.action]?.noun || "item")} ${x.target_id}: ${whatHappened(x)} I've stopped trying. You can ask me to try again, or hand it to the logistics team.`]);
+  return m;
+}
+
+// ---------- conversation rendering ----------
+function msgNode(it) {
+  if (it.kind === "supplier" || it.kind === "tracer" || it.kind === "moment" || it.kind === "error") {
+    const w = el("div", `msg ${it.kind === "supplier" ? "supplier" : "tracer"} ${it.kind === "moment" ? "moment " + (it.tone || "") : ""} ${it.kind === "error" ? "error" : ""}`);
+    w.append(el("span", "who", it.kind === "supplier" ? "You" : "Tracer"));
+    const b = el("div", "bubble");
+    if (it.title) b.append(el("b", null, it.title));
+    b.append(document.createTextNode(it.text));
+    w.append(b);
+    if (it.meta) w.append(el("span", "meta", it.meta));
+    if (it.kind === "tracer" && it.chips) {
+      const c = el("div", "chipsugg");
+      for (const s of it.chips) { const btn = el("button", null, s); btn.onclick = () => send(s); c.append(btn); }
+      w.append(c);
+    }
+    return w;
+  }
+  const w = el("div", "msg tracer"); w.append(el("span", "who", "Tracer"));
+  const box = el("div", "card"); box.dataset.card = `${it.kind}:${it.rid}`; box.dataset.idx = items.indexOf(it); w.append(box);
+  return w;
+}
+
+function renderThread(scroll) {
+  const th = $("thread"), atBottom = th.scrollHeight - th.scrollTop - th.clientHeight < 80;
+  const key = JSON.stringify(items.map((i) => [i.kind, i.text, i.rid, i.key])) + busy;
+  if (th.dataset.key !== key) {
+    th.dataset.key = key;
+    th.replaceChildren(...items.map(msgNode));
+    if (busy) { const t = el("div", "msg tracer typing"); t.append(el("span", "who", "Tracer"));
+      const b = el("div", "bubble"); b.append(el("i"), el("i"), el("i")); t.append(b); th.append(t); }
+    for (const c of th.querySelectorAll("[data-card]")) c.dataset.key = "";
+  }
+  renderCards();
+  if (scroll || atBottom) th.scrollTop = th.scrollHeight;
+}
+
+function renderCards() {
+  for (const box of $("thread").querySelectorAll("[data-card]")) {
+    const [kind, r] = box.dataset.card.split(":");
+    const it = items[+box.dataset.idx];
+    if (r !== rid) {   // a card from an earlier recall: show it as it last looked, without live buttons
+      if (box.dataset.key !== "snap") {
+        box.dataset.key = "snap";
+        if (it?.snap) { box.innerHTML = it.snap; box.querySelectorAll("button, input").forEach((b) => { b.disabled = true; }); }
+        else box.replaceChildren(el("p", "sub", "From an earlier recall. Switch to it in the workspace to see it live."));
+        box.style.opacity = ".85";
+      }
+      continue;
+    }
+    box.style.opacity = "";
+    if (kind === "searching") put(box, JSON.stringify([!!SCOPE, STEPS.length]), searchingCard);
+    if (kind === "scope") put(box, JSON.stringify([!!SCOPE, STEPS.length, S?.control?.approval, S?.control?.status, S?.world]), scopeCard);
+    if (kind === "progress") put(box, JSON.stringify([counts(), S?.control?.paused, agentHere(), agentDied(), S?.control?.status, nowText()]), progressCard);
+    if (kind === "report") put(box, JSON.stringify([S?.control?.report, S?.control?.acknowledged, needItems().length, agentHere()]), reportCard);
+    if (it && S?.control?.status && it.snap !== box.innerHTML) { it.snap = box.innerHTML; snapDirty = true; }
+  }
+  if (snapDirty) { snapDirty = false; save(); }
+}
+
+function searchingCard() {
+  const w = el("div"); w.style.display = "grid"; w.style.gap = "8px";
+  if (SCOPE) { w.append(el("p", null, "✓ Checked the warehouse, the order system and the carrier.")); return w; }
+  w.append(el("h3", null, `Searching your lots…`), el("p", "sub", `Asking our warehouse, the order system and the carrier where lot ${cat().lot} is.`));
+  const b = el("div", "bar"), i = el("i"); i.style.width = "35%"; b.append(i); w.append(b);
+  return w;
+}
+
+function chipLabel(sysKey, status, decision, n) {
+  if (decision === "refuse") return `${n} from another lot: leave it alone`;
+  if (sysKey === "customers") {
+    const w = { open: "an open order", shipped: "an order on a truck", delivered: "a delivered order" }[status] || `an order (${status})`;
+    return `${n} with ${w}: ${DECISION_WORD[decision] || decision}`;
+  }
+  return `${n} ${STATUS_WORD[status] || status.replace(/_/g, " ")}: ${DECISION_WORD[decision] || decision}`;
+}
+
+function scopeCard() {
+  const w = el("div"); w.style.display = "grid"; w.style.gap = "12px";
+  if (!SCOPE) { w.append(el("p", "sub", "Waiting for the search results…")); return w; }
+  const ap = S?.control?.approval, pending = ap?.state === "pending", c = cat();
+  w.append(el("h3", null, `Here's where lot ${c.lot} is right now`));
+  const big = el("p", "big"); big.append(document.createTextNode(STEPS.length), el("small", null, "actions planned")); w.append(big);
+  w.append(el("p", "sub", searchedLine(S?.world, SCOPE)));
+  const places = el("div", "places");
+  for (const sys of SYSTEMS) {
+    const list = SCOPE[sys.key] || [], det = el("details", "sys"), sum = el("summary"), name = el("span", "name");
+    name.append(document.createTextNode(sys.name), el("b", null, list.length), document.createTextNode(list.length === 1 ? sys.noun[0] : sys.noun[1]));
+    sum.append(name, el("span", "more", "Reasons"));
+    const groups = new Map();
+    for (const it of list) { const k = `${sys.key === "customers" ? it.order_status : it.status}|${it.decision}`; groups.set(k, (groups.get(k) || 0) + 1); }
+    const chips = el("span", "chips");
+    for (const [k, n] of groups) { const [st, dec] = k.split("|");
+      chips.append(el("span", `chip ${dec === "refuse" ? "refuse" : ACTING.has(dec) ? "act" : ""}`, chipLabel(sys.key, st, dec, n))); }
+    sum.append(chips); det.append(sum);
+    const ul = el("ul", "items");
+    for (const it of list) {
+      const st = sys.key === "customers" ? it.order_status : it.status, li = el("li");
+      li.append(el("span", "id", it.id), document.createTextNode(sys.key === "customers"
+        ? `via ${it.order_id} (${STATUS_WORD[st] || st}): ${DECISION_WORD[it.decision] || it.decision}`
+        : `${STATUS_WORD[st] || st}${it.lot && it.lot !== SCOPE.lot ? `, lot ${it.lot}` : ""}: ${DECISION_WORD[it.decision] || it.decision}`),
+        el("span", "reason", it.reason || ""));
+      ul.append(li);
+    }
+    det.append(ul); places.append(det);
+  }
+  w.append(places);
+  const checks = el("ul", "checks");
+  for (const r of SYSTEMS.flatMap((s) => (SCOPE[s.key] || []).filter((i) => i.decision === "refuse")))
+    checks.append(el("li", null, `Left alone: ${r.id}. ${r.reason || "It is from another lot."}`));
+  for (const k of SCOPE.checks || []) {
+    const li = el("li", k.ok ? "ok" : "bad", `${k.ok ? "✓" : "✗"} ${k.summary}`);
+    for (const p of k.problems || []) li.append(el("span", "reason", `Needs the logistics team: ${p}`));
+    checks.append(li);
+  }
+  if (checks.children.length) w.append(checks);
+  if (pending) {
+    w.append(el("p", "note", "Nothing has been changed yet. I've only looked. Approve and I'll start."));
+    const row = el("div", "row"), ok = el("button", "btn primary", "Approve and start"), no = el("button", "btn", "Cancel");
+    ok.onclick = () => approveNow(); no.onclick = () => cancelNow();
+    row.append(ok, no); w.append(row);
+  } else if (ap?.state === "approved") {
+    w.append(el("p", "note", `Approved by ${ap.by} at ${clock(ap.at)}.`));
+  }
+  return w;
+}
+
+function nowText() {
+  if (!S) return "";
+  if (S.control.status === "done") return "Finished. Everything is confirmed.";
+  if (S.control.status === "needs_attention") return "Finished, with items that need a person.";
+  if (agentDied()) return "";
+  if (!agentHere()) return "Tracer isn't running.";
+  if (S.control.paused) return "Paused. I'm holding my place.";
+  const sent = STEPS.find((s) => s.status === "sent") || [...EVENTS].reverse().find((e) => e.event === "sent" && A[e.action]);
+  return sent ? `Right now: ${A[sent.action].doing(sent.target_id)}.` : "Right now: getting started…";
+}
+
+function progressCard() {
+  const c = counts(), total = STEPS.length, done = ORDER.reduce((n, a) => n + c[a].handled, 0);
+  const w = el("div"); w.style.display = "grid"; w.style.gap = "12px";
+  w.append(el("h3", null, finished() ? "The recall is complete" : "Recall in progress"));
+  const big = el("p", "big"); big.append(document.createTextNode(`${done} of ${total}`), el("small", null, "actions confirmed")); w.append(big);
+  const bar = el("div", "bar"), i = el("i"); i.style.width = total ? `${(100 * done / total).toFixed(1)}%` : "0"; bar.append(i); w.append(bar);
+  const ul = el("ul", "phases");
+  for (const a of ORDER) {
+    const x = c[a], li = el("li"), full = x.total && x.handled === x.total;
+    li.append(el("span", full ? "tick" : "wait", full ? "✓" : "•"), el("span", null, A[a].phase), el("span", "n", `${x.handled}/${x.total}`));
+    ul.append(li);
+  }
+  w.append(ul);
+  if (agentDied()) {
+    w.append(el("p", "note bad", "Tracer stopped unexpectedly. Nothing is lost: when it restarts it checks every system before doing anything, so nothing is done twice."));
+    const r = el("button", "btn primary", "Restart Tracer"); r.onclick = () => restartNow(); const row = el("div", "row"); row.append(r); w.append(row);
+  } else {
+    w.append(el("p", null, nowText()));
+    if (agentHere() && !finished()) {
+      const row = el("div", "row"), p = el("button", "btn small", S.control.paused ? "Resume" : "Pause");
+      p.onclick = () => pauseNow(!S.control.paused); row.append(p); w.append(row);
+    }
+  }
+  return w;
+}
+
+function reportCard() {
+  const r = S?.control?.report, w = el("div"); w.style.display = "grid"; w.style.gap = "12px";
+  if (!r) { w.append(el("p", "sub", "The report will appear when the recall finishes.")); return w; }
+  const c = cat();
+  w.append(el("h3", null, "Recall effectiveness report"));
+  const ctl = S.control, dt = (iso) => iso ? parseT(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
+  w.append(el("p", "sub", `${cap(c.product)}, lot ${c.lot}. ${c.hazard}. Started ${dt(ctl.started_at)}, finished ${dt(ctl.finished_at || r.generated_at)}.`));
+  const tot = el("ul", "totals"), line = (n, rest) => { const li = el("li"); li.append(el("b", null, n), document.createTextNode(` ${rest}`)); tot.append(li); };
+  if (r.units_held) line(`${r.units_held.verified} of ${r.units_held.total}`, "cases locked in the warehouse");
+  if (r.orders_cancelled) { const e = r.orders_cancelled.escalated || 0;
+    line(`${r.orders_cancelled.verified} of ${r.orders_cancelled.total}`, `orders cancelled before they left${e ? `, ${e} brought back from ${word(e, "its truck", "their trucks")} instead` : ""}`); }
+  if (r.shipments_intercepted) line(`${r.shipments_intercepted.verified} of ${r.shipments_intercepted.total}`, "shipments brought back");
+  if (r.customers_notified) line(`${r.customers_notified.verified} of ${r.customers_notified.total}`, "customers told, once each");
+  if (r.duplicate_notifications != null) line(r.duplicate_notifications, `duplicate ${word(r.duplicate_notifications, "notice", "notices")}, counted in the notification system itself`);
+  w.append(tot);
+  const lastAt = r.last_intercept_at ? new Date(r.last_intercept_at) : null, pickAt = S.pickup_at ? new Date(S.pickup_at) : null;
+  if (lastAt && pickAt) { const d = pickAt - lastAt;
+    w.append(el("p", d >= 0 ? "note" : "note bad", d >= 0 ? `Every shipment on a truck was called back ${fmtDur(d)} before the next truck pickup.` : `The last shipment was called back ${fmtDur(d)} after the truck pickup.`)); }
+  const need = needItems();
+  if (need.length) {
+    w.append(el("p", null, need.some((x) => !x.ack) ? "Unresolved, waiting for you:" : "Unresolved, with the logistics team:"));
+    for (const x of need) {
+      const d = el("div", `need ${x.ack ? "handed" : ""}`);
+      d.append(el("b", null, `${cap(A[x.action]?.noun || "Check")} ${x.target_id || ""}`), el("span", null, whatHappened(x)));
+      if (x.ack) d.append(el("span", "sub", `With the logistics team since ${clock(x.ack.at)}${x.ack.note ? `. Your note: ${x.ack.note}` : "."}`));
+      else {
+        const row = el("div", "row noprint"), retry = el("button", "btn small", "Try again"), note = el("input"), hand = el("button", "btn small", "Hand to logistics team");
+        retry.disabled = !!S.agent_running; retry.onclick = () => retryNow();
+        note.placeholder = "Note for the logistics team"; note.maxLength = 140; note.setAttribute("aria-label", "Note for the logistics team");
+        hand.onclick = () => handNow(x, note.value);
+        row.append(retry, note, hand); d.append(row);
+      }
+      w.append(d);
+    }
+  } else w.append(el("p", "note", "Nothing is unresolved. Every action was confirmed."));
+  const row = el("div", "row noprint"), dl = el("a", "btn primary", "Download report (JSON)"), pr = el("button", "btn", "Print");
+  dl.href = `/report?recall_id=${encodeURIComponent(rid)}`; dl.style.textDecoration = "none";
+  pr.onclick = () => { const card = pr.closest(".card"); card.classList.add("print-target"); document.body.classList.add("printing");
+    window.print(); document.body.classList.remove("printing"); card.classList.remove("print-target"); };
+  row.append(dl, pr); w.append(row);
+  w.append(el("p", "sub noprint", "Proof for every item is in the recall workspace: choose any case, order, shipment or customer."));
+  return w;
+}
+
+// ---------- workspace ----------
+function stepState(s) {
+  if (isEscalated(s)) return ["other", "handled another way"];
+  if (s.status === "verified") return ["confirmed", "confirmed"];
+  if (s.status === "sent") return ["doing", "doing"];
+  if (s.status === "failed") return [agentHere() ? "doing" : "problem", agentHere() ? "retrying" : "problem"];
+  return ["waiting", "waiting"];
+}
+function proofNode(s) {
+  const a = A[s.action], p = s.proof, box = el("div", "proof"), dl = el("dl");
+  const row = (k, v) => { if (v != null && v !== "") dl.append(el("dt", null, k), el("dd", null, String(v))); };
+  if (s.status === "verified" && p) {
+    box.append(el("b", null, `${a.done(s.target_id)}.`));
+    row("How we know", p.source === "reconcile" ? `Tracer was interrupted during this action. On restart it checked the ${a.record}, found it done, and did not repeat it.`
+                                                 : `After acting, Tracer checked the ${a.record} and saw the change.`);
+    row("System showed", p.observed_status); row("Reference", p.read_back_id); row("Confirmed at", clock(p.at));
+  } else if (isEscalated(s)) {
+    box.append(el("b", null, `Order ${s.target_id} was handled another way.`));
+    row("What happened", s.last_error.startsWith("already delivered") ? "Already delivered, so its customer is told instead."
+      : `Left on a truck before it could be cancelled, so its shipment${(s.last_error.match(/ TRK-\d+/) || [""])[0]} was brought back.`);
+  } else if (s.status === "failed") {
+    box.append(el("b", null, `Not confirmed yet.`)); row("What happened", whatHappened(s));
+  } else box.append(el("span", null, s.status === "sent" ? "Tracer is doing this right now." : "Not started yet."));
+  row("Attempts", s.attempts || null);
+  box.append(dl); return box;
+}
+
+function renderWorkspace() {
+  const body = $("wsBody");
+  const recallsWithState = LIST.filter((r) => r.status);
+  if (!rid || !S || !S.control.status) {
+    put(body, JSON.stringify(["empty", recallsWithState.map((r) => r.recall_id), rid]), () => {
+      const w = el("div");
+      w.append(el("p", "empty", "No recall open yet. Tell Tracer what happened in the chat, and the plan and every action will show up here."));
+      if (recallsWithState.length) w.append(switcher(recallsWithState));
+      return w;
+    });
+    return;
+  }
+  const c = cat(), cnt = counts(), total = STEPS.length, done = ORDER.reduce((n, a) => n + cnt[a].handled, 0);
+  const statusWord = S.control.approval?.state === "pending" ? (SCOPE ? "waiting for your approval" : "searching")
+    : S.control.status === "done" ? "finished" : S.control.status === "needs_attention" ? "finished, items need a person"
+    : agentDied() ? "stopped unexpectedly" : S.control.paused ? "paused" : agentHere() ? "running" : "stopped";
+  put(body, JSON.stringify([rid, STEPS.map((s) => [s.status, s.attempts]), statusWord, proofSeq, recallsWithState.map((r) => r.recall_id), S.pickup_at && Math.floor(Date.now() / 30000)]), () => {
+    const w = el("div");
+    if (recallsWithState.length > 1) w.append(switcher(recallsWithState));
+    w.append(el("p", "title", `${cap(c.product)}, lot ${c.lot}`), el("p", "haz", c.hazard));
+    const st = el("p", "state"); const b = el("b", null, cap(statusWord)); st.append(b);
+    if (S.pickup_at && !finished()) { const ms = new Date(S.pickup_at) - Date.now();
+      st.append(document.createTextNode(ms > 0 ? `Next truck pickup in ${fmtDur(ms)}` : "The truck pickup time has passed")); }
+    w.append(st);
+    const ov = el("div", "overall"), big = el("p"); big.append(el("span", "big", `${done}/${total}`), el("small", null, "actions confirmed"));
+    const bar = el("div", "bar"), fill = el("i"); fill.style.width = total ? `${100 * done / total}%` : "0"; bar.append(fill);
+    bar.style.marginTop = "8px"; ov.append(big, bar); w.append(ov);
+    if (!total) { w.append(el("p", "empty", "Tracer is finding where the lot is. Every planned action will be listed here.")); return w; }
+    for (const a of ORDER) {
+      const g = el("section", "group"), h = el("h3", null, A[a].group), list = STEPS.filter((s) => s.action === a);
+      h.append(el("span", null, `${cnt[a].handled}/${cnt[a].total}`)); g.append(h);
+      const ul = el("ul", "steps");
+      for (const s of list) {
+        const li = el("li"), btn = el("button", "st"), [cls, label] = stepState(s);
+        btn.setAttribute("aria-expanded", proofSeq === s.seq ? "true" : "false");
+        const stat = el("span", `stat ${cls}`, label); if (s.attempts > 1) stat.append(el("span", "att", `×${s.attempts}`));
+        btn.append(el("span", "tgt", s.target_id), stat);
+        btn.onclick = () => { proofSeq = proofSeq === s.seq ? null : s.seq; renderWorkspace(); };
+        li.append(btn); if (proofSeq === s.seq) li.append(proofNode(s)); ul.append(li);
+      }
+      g.append(ul); w.append(g);
+    }
+    return w;
+  });
+}
+function switcher(list) {
+  const s = el("div", "switch");
+  for (const r of list) {
+    const b = el("button", null, `${cap(r.product)}, ${r.lot}`); b.setAttribute("aria-pressed", r.recall_id === rid ? "true" : "false");
+    b.onclick = () => { if (r.recall_id !== rid) { rid = r.recall_id; save(); follow(); } };
+    s.append(b);
+  }
+  return s;
+}
+
+// ---------- reacting to the recall ----------
+function react() {
+  if (!rid || !S) return;
+  // Search results arrived: show where the lot is and ask to proceed.
+  if (SCOPE && has((i) => i.kind === "searching" && i.rid === rid) && !has((i) => i.kind === "scope" && i.rid === rid)
+      && S.control.approval?.state === "pending")
+    push({ kind: "scope", rid });
+  // Approved and acting: one live progress card.
+  if (S.control.status && S.control.approval?.state !== "pending" && STEPS.some((s) => s.status !== "planned")
+      && has((i) => i.rid === rid) && !has((i) => i.kind === "progress" && i.rid === rid))
+    push({ kind: "progress", rid });
+  // Notable moments, once each.
+  if (has((i) => i.kind === "progress" && i.rid === rid))
+    for (const [key, tone, title, text] of moments())
+      if (!has((i) => i.kind === "moment" && i.key === `${rid}:${key}`)) push({ kind: "moment", key: `${rid}:${key}`, rid, tone, title, text });
+  if (agentDied() && deadSeen !== `${rid}:${S.agent_exit_code}:${STEPS.filter((s) => s.status === "verified").length}`) {
+    deadSeen = `${rid}:${S.agent_exit_code}:${STEPS.filter((s) => s.status === "verified").length}`;
+    if (!has((i) => i.kind === "moment" && i.key === `${rid}:dead:${deadSeen}`))
+      push({ kind: "moment", key: `${rid}:dead:${deadSeen}`, rid, tone: "bad", title: "I stopped unexpectedly",
+             text: "My process was killed in the middle of an action. Press Restart in the progress card: I'll check every system before doing anything, so nothing gets done twice." });
+  }
+  // Finished: explain, then the report.
+  if (finished() && S.control.report && !agentHere() && has((i) => i.kind === "progress" && i.rid === rid)
+      && !has((i) => i.kind === "report" && i.rid === rid && i.finishedAt === S.control.finished_at) && !explaining) explainNow();
+}
+
+async function explainNow() {
+  explaining = true; busy = true; renderThread(true);
+  let text;
+  try {
+    const r = await fetch("/chat/explain", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recall_id: rid }) });
+    const j = await r.json(); text = r.ok ? j.text : null;
+  } catch (e) { text = null; }
+  busy = false;
+  push({ kind: "tracer", rid, text: text || "The recall has finished. Here is the report." });
+  push({ kind: "report", rid, finishedAt: S.control.finished_at });
+  explaining = false;
+}
+
+// ---------- talking to Tracer ----------
+function history() {
+  const out = [];
+  for (const i of items) {
+    if (i.kind === "supplier") out.push({ role: "supplier", text: i.text });
+    else if (i.kind === "tracer") out.push({ role: "tracer", text: i.text });
+    else if (i.kind === "moment") out.push({ role: "tracer", text: `${i.title}. ${i.text}` });
+    else if (i.kind === "scope") out.push({ role: "tracer", text: `[Showed where lot ${cat(i.rid).lot} is and the plan, then asked for approval.]` });
+    else if (i.kind === "report") out.push({ role: "tracer", text: "[Showed the recall effectiveness report.]" });
+  }
+  return out.slice(-30);
+}
+async function send(text) {
+  text = (text || "").trim(); if (!text || busy) return;
+  push({ kind: "supplier", text });
+  $("input").value = ""; autosize();
+  busy = true; renderThread(true);
+  let j;
+  try {
+    const r = await fetch("/chat", { method: "POST", headers: { "content-type": "application/json" },
+                                     body: JSON.stringify({ messages: history(), recall_id: rid }) });
+    j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.status);
+  } catch (e) {
+    busy = false; push({ kind: "error", text: `I couldn't answer just now (${e.message}). Please try again.` }); return;
+  }
+  busy = false;
+  if (j.recall_id && j.recall_id !== rid && (j.intent === "start_recall")) { rid = j.recall_id; save(); await follow(); }
+  const lotMatch = LOTS_N && /\b[A-Z]{2}-\d{4}\b/.test(j.reply || "") && ["start_recall", "clarify"].includes(j.intent);
+  push({ kind: "tracer", rid: j.recall_id, text: j.reply || "…",
+         meta: lotMatch ? `Searched ${LOTS_N.toLocaleString("en-US")} of Northfield's production lots.` : undefined });
+  if (j.intent === "start_recall" && j.ok && /started finding/.test(j.action || "") && !has((i) => i.kind === "searching" && i.rid === j.recall_id))
+    push({ kind: "searching", rid: j.recall_id });
+  if (j.intent === "cancel" && j.ok) await follow();
+  await refresh();
+}
+
+async function post(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) toast(`Couldn't do that: ${j.detail || r.status}`);
+  await refresh();
+  return r.ok;
+}
+async function approveNow() {
+  push({ kind: "supplier", text: "Approve and start." });
+  if (await post("/approve", { recall_id: rid, approved_by: "Northfield Foods" }))
+    push({ kind: "tracer", rid, text: "Approved. I'm starting now. You'll see every action here and in the workspace, and I'll tell you straight away if anything needs you." });
+}
+async function cancelNow() {
+  push({ kind: "supplier", text: "Cancel." });
+  if (await post("/cancel-recall", { recall_id: rid })) { push({ kind: "tracer", rid, text: "Cancelled. Nothing was changed in any system." }); await follow(); }
+}
+const pauseNow = async (p) => { if (await post("/pause", { recall_id: rid, paused: p })) toast(p ? "Paused." : "Resumed."); };
+async function restartNow() {
+  if (await post("/agent/start", { recall_id: rid })) push({ kind: "tracer", rid, text: "Restarting. I'll check every system first, so nothing is done twice." });
+}
+async function retryNow() {
+  push({ kind: "supplier", text: "Try again." });
+  if (await post("/agent/start", { recall_id: rid, retry: true }))
+    push({ kind: "tracer", rid, text: "Trying again. I'll only redo what isn't confirmed." });
+}
+async function handNow(x, note) {
+  if (await post("/acknowledge", { recall_id: rid, seq: x.seq ?? null, target_id: x.target_id ?? null, note }))
+    push({ kind: "tracer", rid, text: `Done. ${cap(A[x.action]?.noun || "That item")} ${x.target_id || ""} is now with the logistics team${note ? `, with your note` : ""}.` });
+}
+
+let toastTimer;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 3800); }
+
+// ---------- data ----------
+async function refresh() {
+  try {
+    const list = await (await fetch("/recalls")).json(); LIST = list;
+    if (rid) {
+      const [s, steps] = await Promise.all([fetch(`/state?recall_id=${rid}`).then((r) => r.json()), fetch(`/steps?recall_id=${rid}`).then((r) => r.json())]);
+      S = s; STEPS = steps;
+      if (!s.control.status) { SCOPE = null; EVENTS = []; }
+    } else { S = null; STEPS = []; }
+    react(); renderThread(false); renderWorkspace();
+  } catch (e) { /* server briefly unreachable: keep the last view */ }
+}
+function addEvent(ev) {
+  EVENTS.push(ev); if (EVENTS.length > 800) EVENTS.shift();
+  if (ev.event === "planned" && ev.detail?.scope) SCOPE = ev.detail.scope;
+}
+async function follow() {   // (re)attach to the current recall's history and live events
+  S = null; STEPS = []; EVENTS = []; SCOPE = null; proofSeq = null; deadSeen = null;
+  $("wsBody").dataset.key = "";
+  if (source) { source.close(); source = null; }
+  if (rid) {
+    try { (await (await fetch(`/history?recall_id=${rid}&limit=800`)).json()).forEach(addEvent); } catch (e) {}
+    source = new EventSource(`/events?recall_id=${rid}`);
+    source.onmessage = (m) => { addEvent(JSON.parse(m.data)); react(); renderCards(); };
+  }
+  await refresh();
+}
+
+// ---------- input ----------
+function autosize() { const t = $("input"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }
+$("input").addEventListener("input", autosize);
+$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send($("input").value); } });
+$("form").onsubmit = (e) => { e.preventDefault(); send($("input").value); };
+const tab = (t) => { $("split").dataset.tab = t; $("tabChat").setAttribute("aria-selected", t === "chat"); $("tabWs").setAttribute("aria-selected", t === "ws"); };
+$("tabChat").onclick = () => tab("chat"); $("tabWs").onclick = () => tab("ws");
+document.querySelectorAll("[data-demo]").forEach((b) => b.onclick = async () => {
+  const k = b.dataset.demo; $("demo").open = false;
+  if (k === "glitch") { if (await post("/chaos", { service: "warehouse", body: { drop_next_writes: 1 } })) toast("Demo: the warehouse will drop the next hold."); }
+  if (k === "pickup") { if (await post("/chaos/pickup", { recall_id: rid || "RC-GB-2611" })) toast("Demo: a truck collected an order early."); }
+  if (k === "api") { if (await post("/chaos", { service: "carrier", body: { api_version: "v2" } })) toast("Demo: the carrier changed its system."); }
+  if (k === "crash") { if (await post("/agent/crash", { recall_id: rid })) toast("Demo: Tracer will die right after its next action."); }
+  if (k === "reset") {
+    if (!confirm("Reset the demo? This clears every recall, puts the mock systems back to the start, and clears this chat.")) return;
+    if (await post("/reset", { wipe_memory: false })) { items = []; rid = null; save(); greet(); await follow(); toast("Demo reset."); }
+  }
+});
+
+function greet() {
+  if (items.length) return;
+  items.push({ kind: "tracer", text: "Hi, I'm Tracer. I run product recalls for Northfield Foods at your logistics provider.\n\nTell me what happened. I'll find where the lot is in our warehouse, in open orders, on trucks and in customers' homes, and show you the plan. Nothing changes until you approve.",
+               chips: ["We have undeclared peanuts", "Our oat bars may contain tree nuts", "What's the status?"] });
+  save();
+}
+
+(async function init() {
+  CAT = await (await fetch("/catalogue")).json();
+  fetch("/lots").then((r) => r.json()).then((l) => { if (Array.isArray(l)) LOTS_N = l.length; }).catch(() => {});
+  load(); greet();
+  renderThread(true);
+  await follow();
+  setInterval(refresh, 1000);
+  $("input").focus();
+})();
+</script>
+</body>
+</html>

@@ -51,7 +51,7 @@ Judging round 1: technical demo 35% · implementation difficulty 30% · impact 2
 
 ## Non-goals (don't build these)
 
-- A dashboard. The UI is a **live log** of steps. It is not the product. (Dashboards as the main feature are banned.)
+- An analytics dashboard. The UI is a **live log** of steps plus a **client console** for directing the agent (declare, approve, resolve, report). Neither is the product, and neither has charts. (Dashboards as the main feature are banned.)
 - Chat with your recall data. (Basic RAG is banned.)
 - Real integrations. The three systems are mocks so failures trigger on cue. **Atlas is real.**
 - Real customer data. Everything is synthetic.

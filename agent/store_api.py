@@ -43,6 +43,8 @@ class StoreAPI(Protocol):
     # Optional: demo crash on demand. True once per request (consumed atomically).
     def take_crash_request(self, recall_id: str) -> bool: ...
     def finish(self, recall_id: str, report: dict[str, Any]) -> None: ...
+    # Optional: keep the report of a run that ended with items left for a human.
+    def save_report(self, recall_id: str, report: dict[str, Any]) -> None: ...
 
     # steps: each transition writes the step and its audit entry together
     def count_steps(self, recall_id: str) -> int: ...
@@ -126,6 +128,10 @@ class MemoryStore:
     def finish(self, recall_id: str, report: dict[str, Any]) -> None:
         doc = self.control[recall_id]
         doc.update(status="done", finished_at=now().isoformat(), report=report, lease_owner=None)
+        self._save()
+
+    def save_report(self, recall_id: str, report: dict[str, Any]) -> None:
+        self.control[recall_id].update(status="needs_attention", report=report, lease_owner=None)
         self._save()
 
     # -- steps ---------------------------------------------------------------

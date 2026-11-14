@@ -9,7 +9,7 @@ Product recall agent for the MongoDB "Agents in Context" Toronto Hackathon (Sat 
 - **MongoDB only.** All state, audit, memory and vector search live in MongoDB Atlas, database `tracer`. No Pinecone, Redis, Postgres, Temporal. The only outside service is the LLM.
 - **Public repo.** Never commit `.env`, `.mcp.json` or any connection string or password. Secrets go in `.env` only.
 - **New work only.** Everything is written today. Keep the "built today" list in the README current.
-- **No banned project shapes:** no Streamlit, no basic RAG, no dashboard as the main feature. The UI is a live log only.
+- **No banned project shapes:** no Streamlit, no basic RAG, no dashboard as the main feature. The UI has two pages, and neither is the product: the live log (`/`, shown in the demo) and the client console (`/console`), where a client directs the agent: declare, approve, resolve, report. No charts or analytics views.
 - All data is synthetic.
 
 ## Stack
