@@ -6,6 +6,27 @@
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["-m", "uvicorn", "web.app:app", "--port", "8000"],
       "port": 8000
+    },
+    {
+      "name": "demo",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["LIVE_LOG_PORT=8005", "bash", "scripts/run_demo.sh"],
+      "port": 8005,
+      "autoPort": false
+    },
+    {
+      "name": "rehearsal",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "TRACER_DB=tracer_rehearsal",
+        "WAREHOUSE_URL=http://localhost:8011",
+        "ORDERS_URL=http://localhost:8012",
+        "CARRIER_URL=http://localhost:8013",
+        "bash", "-c",
+        "trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM; P=.venv/bin/python; $P -m uvicorn mocks.warehouse:app --port 8011 --log-level warning & $P -m uvicorn mocks.orders:app --port 8012 --log-level warning & $P -m uvicorn mocks.carrier:app --port 8013 --log-level warning & $P -m uvicorn web.app:app --port 8015 --log-level warning & wait"
+      ],
+      "port": 8015,
+      "autoPort": false
     }
   ]
 }

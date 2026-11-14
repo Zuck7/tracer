@@ -20,11 +20,37 @@ Full design, schemas and demo script: [docs/](docs/README.md) (start with [archi
 
 Python, FastAPI and MongoDB Atlas (state, audit log, vector memory, change streams). The only non-MongoDB service is the LLM.
 
-## Setup
+## How it answers Track 3: Finish the Job
+
+| The track asks | Tracer's answer | Where |
+|---|---|---|
+| A long multi-step task across several systems | One recall is 60 steps across three separate services: a warehouse, an order system and a carrier with customer notifications. The recalled lot is found among ~4,800 cases, ~15,000 orders and ~13,000 shipments of other lots, and nothing outside it is touched | `agent/plan.py`, `mocks/` |
+| MongoDB Atlas persists verified task state | Every step lives in `steps`; the database refuses a `verified` step without `proof`; each status change and its audit entry commit in one transaction | `store/setup_db.py`, `store/steps.py` |
+| How does it tell an action that took effect from one that was only sent? | It reads the record back after every write. A 200 with no change is caught and retried with the same idempotency key | `agent/clients.py`, `agent/run.py` |
+| How does it resume after a crash without replaying its history? | The step is saved as `sent` before the call. On restart only the `sent` steps are checked against the real system; verified ones are skipped and nothing is resent | `agent/reconcile.py` |
+| How does it adapt when fields or workflow change? | The carrier renames a field and moves an endpoint: Claude proposes a new call, it is tested on one shipment, then used. A truck collects an order before its cancel lands: the agent intercepts the shipment instead | `agent/repair.py`, `agent/run.py` |
+| Vector Search retrieves relevant past experience | Proven fixes are stored in `experiences` with Atlas Automated Embedding. The next recall finds the fix by similarity and makes no LLM call. The supplier's lot records are searched the same way to find the lot from a plain-language report | `store/memory.py`, `store/catalogue.py` |
+
+It also covers parts of the other two tracks: a supplier must approve the plan before anything changes, a policy gate checks every action before it runs, and every action is audited with its actor (Track 1); remembered fixes expire by TTL (Track 2).
+
+## Run it
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-cp .env.example .env   # then fill in MONGODB_URI and LLM_API_KEY
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env            # fill in MONGODB_URI and LLM_API_KEY
+python -m scripts.check_setup   # checks .env, Atlas and keys without printing them
+python -m store.setup_db        # collections, validators, indexes (safe to re-run)
+scripts/run_demo.sh             # three mock systems + the live log
+```
+
+Open the URL it prints. `/console` is the supplier's side: say what happened, approve the plan, read the report. `/` is the live log, with the disruption buttons. A full walk-through with expected results is in [docs/07-full-test.md](docs/07-full-test.md).
+
+```bash
+python -m scripts.prove_recall RC-GB-2611          # every system's own records vs what Tracer wrote in Atlas
+python -m scripts.check_exactly_once RC-GB-2611    # one notice per customer, checked in the notify system
+python -m scripts.compare_recalls                  # recall 1 vs recall 2: LLM calls and memory hits, from Atlas
+python -m tests.test_agent_loop                    # agent loop tests
 ```
 
 ## Built today
